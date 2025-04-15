@@ -5,13 +5,13 @@ plugins {
 
     android {
         namespace = "com.example.uvctestcamera"
-        compileSdk = 35
+        compileSdk = 28
 
         defaultConfig {
             applicationId = "com.example.uvctestcamera"
             minSdk = 21
             //noinspection ExpiredTargetSdkVersion
-            targetSdk = 30
+            targetSdk = 28
             versionCode = 1
             versionName = "1.0"
 
@@ -54,6 +54,10 @@ plugins {
         implementation(files("libs/usbCameraCommon-release.aar"))
         implementation(files("libs/libuvccommon.aar"))
         implementation(files("libs/common-2.12.4.aar"))
+
+        implementation(libs.mlkit.face.detection)
+        implementation(libs.tensorflow.lite)
+        implementation(libs.vision.common)
 
         testImplementation(libs.junit)
         androidTestImplementation(libs.ext.junit)
