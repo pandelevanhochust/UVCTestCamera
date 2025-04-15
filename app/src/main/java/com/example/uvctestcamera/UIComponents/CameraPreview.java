@@ -1,19 +1,20 @@
 package com.example.uvctestcamera.UIComponents;
 
+import android.app.Activity;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.hardware.usb.UsbDevice;
 import android.media.Image;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Pair;
 
-import android.view.LayoutInflater;
-import android.view.Surface;
-import android.view.View;
-import android.view.ViewGroup;
+import android.view.*;
 import android.widget.Button;
 
 import android.widget.Toast;
@@ -22,11 +23,17 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import com.example.uvctestcamera.FaceProcessor;
 import com.example.uvctestcamera.Faces;
+import com.example.uvctestcamera.ImageProcessor;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
 
+import com.google.mlkit.vision.face.FaceDetection;
+import com.google.mlkit.vision.face.FaceDetector;
+import com.google.mlkit.vision.face.FaceDetectorOptions;
 import com.serenegiant.usb.USBMonitor;
+import com.serenegiant.usb.UVCCamera;
 import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
+import com.serenegiant.usbcameracommon.UVCCameraHandler;
 import com.serenegiant.widget.UVCCameraTextureView;
 import org.tensorflow.lite.Interpreter;
 
@@ -64,9 +71,16 @@ public class CameraPreview extends Fragment {
     private Interpreter tfLite;
     private float[][] embeddings;
     private final HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
+    private FaceDetector faceDetector;
 
     private static final int INPUT_SIZE = 112;
     private static final int OUTPUT_SIZE = 112;
+
+    private volatile boolean mIsRunning;
+    private int mImageProcessorSurfaceId;
+    protected ImageProcessor mImageProcessor;
+    protected SurfaceView mResultView;
+
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,@Nullable Bundle savedInstanceState) {
@@ -88,7 +102,7 @@ public class CameraPreview extends Fragment {
 
         usbMonitor = new USBMonitor(requireContext(),deviceConnectListener);
         loadModel();
-        startTracking();
+        setupFaceDetector();
         usbMonitor.register();
         Log.d(TAG,"Reach onViewCreated");
     }
@@ -112,13 +126,21 @@ public class CameraPreview extends Fragment {
             }
             if (DEBUG) Log.v(TAG, "onConnect:");
             try {
+
+                cameraView.resetFps();
+                cameraHandler.startPreview();
+
                 if(cameraHandler != null) {
                     cameraHandler.open(ctrlBlock);
                     SurfaceTexture st = cameraView.getSurfaceTexture();
-                    Surface surface = new Surface(st);
-                    surfaceId = surface.hashCode();
-                    cameraHandler.addSurface(surfaceId,surface,false);
-                    cameraHandler.startPreview();
+
+                    if (st != null) {
+                        Surface surface = new Surface(st);
+                        surfaceId = surface.hashCode();
+                        cameraHandler.addSurface(surfaceId,surface,false);
+                    }
+
+                    startImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT);
                 }
             } catch (SecurityException e) {
                 Log.e(TAG, "SecurityException: no permission to access USB", e);
@@ -150,20 +172,12 @@ public class CameraPreview extends Fragment {
     @Override
     public void onStart() {
         super.onStart();
-
         usbMonitor.register();
         // 🔍 Log connected USB devices
         for (UsbDevice device : usbMonitor.getDeviceList()) {
             Log.d("USB", "Device: " + device.getVendorId() + ":" + device.getProductId());
         }
     }
-
-//    @Override
-//    public void onStop() {
-//        stopPreview();
-//        usbMonitor.unregister();
-//        super.onStop();
-//    }
 
     @Override
     public void onDestroyView() {
@@ -174,8 +188,87 @@ public class CameraPreview extends Fragment {
         CameraViewBinding = null;
     }
 
+    protected void startImageProcessor(final int processing_width, final int processing_height) {
+        if (DEBUG) Log.v(TAG, "startImageProcessor:");
+        mIsRunning = true;
+        if (mImageProcessor == null) {
+            mImageProcessor = new ImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT,	// src size
+                    new MyImageProcessorCallback(processing_width, processing_height));	// processing size
+            mImageProcessor.start(processing_width, processing_height);	// processing size
+            final Surface surface = mImageProcessor.getSurface();
+            mImageProcessorSurfaceId = surface != null ? surface.hashCode() : 0;
+            if (mImageProcessorSurfaceId != 0) {
+                cameraHandler.addSurface(mImageProcessorSurfaceId, surface, false);
+            }
+        }
+    }
 
-    public void startTracking(){}
+    protected class MyImageProcessorCallback implements ImageProcessor.ImageProcessorCallback {
+        private final int width, height;
+        private final Matrix matrix = new Matrix();
+        private Bitmap mFrame;
+
+        protected MyImageProcessorCallback( final int processing_width, final int processing_height) {
+            width = processing_width;
+            height = processing_height;
+        }
+
+        @Override
+        public void onFrame(final ByteBuffer frame) {
+            if (mResultView != null) {
+                final SurfaceHolder holder = mResultView.getHolder();
+                if ((holder == null)
+                        || (holder.getSurface() == null)
+                        || (frame == null)) return;
+
+//--------------------------------------------------------------------------------
+// Using SurfaceView and Bitmap to draw resulted images is inefficient way,
+// but functions onOpenCV are relatively heavy and expect slower than source
+// frame rate. So currently just use the way to simply this sample app.
+// If you want to use much efficient way, try to use as same way as
+// UVCCamera class use to receive images from UVC camera.
+//--------------------------------------------------------------------------------
+                if (mFrame == null) {
+                    mFrame = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                    final float scaleX = mResultView.getWidth() / (float)width;
+                    final float scaleY = mResultView.getHeight() / (float)height;
+                    matrix.reset();
+                    matrix.postScale(scaleX, scaleY);
+                }
+                try {
+                    frame.clear();
+                    mFrame.copyPixelsFromBuffer(frame);
+                    final Canvas canvas = holder.lockCanvas();
+                    if (canvas != null) {
+                        try {
+                            canvas.drawBitmap(mFrame, matrix, null);
+                        } catch (final Exception e) {
+                            Log.w(TAG, e);
+                        } finally {
+                            holder.unlockCanvasAndPost(canvas);
+                        }
+                    }
+                } catch (final Exception e) {
+                    Log.w(TAG, e);
+                }
+            }
+        }
+
+        @Override
+        public void onResult(final int type, final float[] result) {
+            // do something
+        }
+
+    }
+
+
+    private void detectFace(Bitmap bitmap) {
+        Log.d(TAG,"Reach detect face ");
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        faceDetector.process(image)
+                .addOnSuccessListener(faces -> onFacesDetected(faces, image))
+                .addOnFailureListener(e -> Log.e(TAG, "Face detection failed", e));
+    }
 
     private void onFacesDetected(List<Face> faces, InputImage inputImage){
         overlayView.clear();
@@ -185,9 +278,6 @@ public class CameraPreview extends Fragment {
             Face face = faces.get(0);
             Rect boundingBox = face.getBoundingBox();
             overlayView.draw(boundingBox,1.0f,1.0f,"Detected Person");
-//            Image image = inputImage.getMediaImage();
-//            int rotation = inputImage.getRotationDegrees();
-//            Pair<String,Float> output  = recognize(image, rotation,boundingBox);
 
             Pair <String,Float> output = recognize(inputImage.getBitmapInternal(),boundingBox);
 
@@ -248,10 +338,20 @@ public class CameraPreview extends Fragment {
 
             MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
             tfLite = new Interpreter(model);
-            Log.e(TAG,"Deployed model successfully");
+            Log.d(TAG,"Deployed model successfully");
         } catch (IOException e) {
             Log.e(TAG, "Error loading model", e);
         }
+    }
+
+    private void setupFaceDetector() {
+        FaceDetectorOptions options = new FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                .build();
+        faceDetector = FaceDetection.getClient(options);
+        Log.d(TAG,"Face detector deployed successfully");
     }
 
     //Load savedFaces from Backend

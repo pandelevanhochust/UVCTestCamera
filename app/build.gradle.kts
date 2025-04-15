@@ -58,6 +58,7 @@ plugins {
         implementation(libs.mlkit.face.detection)
         implementation(libs.tensorflow.lite)
         implementation(libs.vision.common)
+        implementation(libs.ui.graphics.android)
 
         testImplementation(libs.junit)
         androidTestImplementation(libs.ext.junit)

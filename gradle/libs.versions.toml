@@ -11,6 +11,7 @@ constraintlayout = "2.0.4"
 mlkit-face-detection = "16.0.2"
 tflite = "2.10.0"
 visionCommon = "16.1.0"
+uiGraphicsAndroid = "1.7.8"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -25,6 +26,7 @@ mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", ve
 
 tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.ref = "tflite" }
 vision-common = { group = "com.google.mlkit", name = "vision-common", version.ref = "visionCommon" }
+ui-graphics-android = { group = "androidx.compose.ui", name = "ui-graphics-android", version.ref = "uiGraphicsAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
