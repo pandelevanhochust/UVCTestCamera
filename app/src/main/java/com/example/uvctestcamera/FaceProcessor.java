@@ -19,6 +19,9 @@ public class FaceProcessor {
         return resized_bitmap;
     }
 
+    private static final int PREVIEW_WIDTH = 640;
+    private static final int PREVIEW_HEIGHT = 480;
+
     /*
     USB Camera Frame (NV21)
     → convert to Bitmap
@@ -37,31 +40,30 @@ public class FaceProcessor {
         return resized_bitmap;
     }
 
+    public static Bitmap ByteBufferToBitmap(ByteBuffer frame) {
+        Bitmap bitmap = Bitmap.createBitmap(PREVIEW_WIDTH, PREVIEW_HEIGHT, Bitmap.Config.ARGB_8888);
+        frame.rewind();
+        bitmap.copyPixelsFromBuffer(frame);
+        return resizeBitmap(bitmap);
+    }
+
     //convert to ByteBuffer - this is used only in CameraX
     public static ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
-        int imageSize = INPUT_SIZE; // width & height
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(imageSize * imageSize * 3 * 4); // 4 bytes per float
+        int inputSize = 112;
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
         byteBuffer.order(ByteOrder.nativeOrder());
-
-        int[] intValues = new int[imageSize * imageSize];
-        bitmap.getPixels(intValues, 0, imageSize, 0, 0, imageSize, imageSize);
-
+        int[] intValues = new int[inputSize * inputSize];
+        bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
         int pixel = 0;
-        for (int i = 0; i < imageSize; ++i) {
-            for (int j = 0; j < imageSize; ++j) {
+
+        for (int i = 0; i < inputSize; ++i) {
+            for (int j = 0; j < inputSize; ++j) {
                 final int val = intValues[pixel++];
-
-                // Extract RGB and normalize to [0, 1]
-                float r = ((val >> 16) & 0xFF) / 255.0f;
-                float g = ((val >> 8) & 0xFF) / 255.0f;
-                float b = (val & 0xFF) / 255.0f;
-
-                byteBuffer.putFloat(r);
-                byteBuffer.putFloat(g);
-                byteBuffer.putFloat(b);
+                byteBuffer.putFloat(((val >> 16) & 0xFF) / 255.0f); // R
+                byteBuffer.putFloat(((val >> 8) & 0xFF) / 255.0f);  // G
+                byteBuffer.putFloat((val & 0xFF) / 255.0f);         // B
             }
         }
-
         return byteBuffer;
     }
 
@@ -203,5 +205,7 @@ public class FaceProcessor {
         image.recycle();
         return resizedBitmap;
     }
+
+
 
 }

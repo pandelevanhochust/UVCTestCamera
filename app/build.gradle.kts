@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
-
     android {
         namespace = "com.example.uvctestcamera"
         compileSdk = 28
@@ -54,11 +53,11 @@ plugins {
         implementation(files("libs/usbCameraCommon-release.aar"))
         implementation(files("libs/libuvccommon.aar"))
         implementation(files("libs/common-2.12.4.aar"))
+        implementation(files("libs/opencv-release.aar"))
 
         implementation(libs.mlkit.face.detection)
         implementation(libs.tensorflow.lite)
         implementation(libs.vision.common)
-        implementation(libs.ui.graphics.android)
 
         testImplementation(libs.junit)
         androidTestImplementation(libs.ext.junit)
