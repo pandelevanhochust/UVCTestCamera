@@ -54,7 +54,6 @@ import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
 public class CameraPreview extends Fragment implements  IFrameCallback {
 
     private UVCCameraTextureView cameraView;
-    private Button captureBtn;
     private USBMonitor usbMonitor;
     private UVCCameraHandlerMultiSurface cameraHandler;
     private int surfaceId = 1;
@@ -84,7 +83,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
     //Limit Frame Analyzed
     private long lastAnalyzedTime = 0;
-    private static final long ANALYZE_INTERVAL_MS = 100; // 5 FPS = every 200ms
+    private static final long ANALYZE_INTERVAL_MS = 500;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,@Nullable Bundle savedInstanceState) {
@@ -234,7 +233,8 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
             float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
             float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
-            overlayView.draw(boundingBox, 1.0f, 1.0f, "unknown");
+
+            overlayView.draw(boundingBox, scaleX, scaleY, "unknown");
 
 //            Pair<String, Float> output = recognize(inputImage.getBitmapInternal(), boundingBox);
 //            String label = output.second >= 1.0f ? "unknown" : output.first;
@@ -277,8 +277,6 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 //        return new Pair<>(name, minDistance);
 //    }
 
-    private void train(Image image){}
-
     //Loading model
     private void loadModel() {
         try {
@@ -307,7 +305,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     }
 
     //Load savedFaces from Backend
-    public void loadFaces(){}//    // Start image processing (OpenGL)
+    public void loadFaces(){}//
 
     protected void startImageProcessor(final int processing_width, final int processing_height) {
         if (DEBUG) Log.v(TAG, "startImageProcessor:");

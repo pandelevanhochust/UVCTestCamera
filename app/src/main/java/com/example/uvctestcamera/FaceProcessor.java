@@ -205,7 +205,4 @@ public class FaceProcessor {
         image.recycle();
         return resizedBitmap;
     }
-
-
-
 }

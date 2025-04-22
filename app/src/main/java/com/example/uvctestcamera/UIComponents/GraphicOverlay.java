@@ -40,6 +40,7 @@ public class GraphicOverlay extends View {
                     rect.top * this.scaleY,
                     rect.right * this.scaleX,
                     rect.bottom * this.scaleY
+
             );
             this.label = label;
         } else {
