@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import com.example.uvctestcamera.UIComponents.CameraPreview;
+import com.example.uvctestcamera.backend.MQTT;
 import com.serenegiant.usb.USBMonitor;
 import com.serenegiant.usb.USBMonitor.UsbControlBlock;
 import com.serenegiant.usbcameracommon.UVCCameraHandler;
@@ -37,11 +38,17 @@ public class MainActivity extends AppCompatActivity {
     private static final int PREVIEW_MODE = 1;
 
     private int mPreviewSurfaceId;
+    private static final String TAG = "TLV";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        Log.d(TAG,"Reach MQTT config");
+        MQTT.loadConfig(this);
+        MQTT.cleanCredentials();
+        MQTT.start();
 
         ImageButton btnIdCard = findViewById(R.id.btn_id_card);
         ImageButton btnAdd = findViewById(R.id.btn_add);

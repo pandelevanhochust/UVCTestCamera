@@ -1,11 +1,7 @@
 package com.example.uvctestcamera.UIComponents;
 
 import android.content.res.AssetFileDescriptor;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Rect;
-import android.graphics.Matrix;
-import android.graphics.SurfaceTexture;
+import android.graphics.*;
 import android.hardware.usb.UsbDevice;
 import android.media.Image;
 import android.os.Bundle;
@@ -22,6 +18,7 @@ import androidx.fragment.app.Fragment;
 import com.example.uvctestcamera.FaceProcessor;
 import com.example.uvctestcamera.Faces;
 import com.example.uvctestcamera.R;
+import com.example.uvctestcamera.backend.MQTT;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
 
@@ -34,7 +31,6 @@ import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
 import com.serenegiant.usb.UVCCamera;
 import com.serenegiant.opencv.ImageProcessor;
-
 
 import org.tensorflow.lite.Interpreter;
 
@@ -50,6 +46,7 @@ import java.util.Map;
 import com.example.uvctestcamera.databinding.CameraPreviewLayoutBinding;
 
 import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
+
 
 public class CameraPreview extends Fragment implements  IFrameCallback {
 
@@ -234,48 +231,56 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
             float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
             float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
 
-            overlayView.draw(boundingBox, scaleX, scaleY, "unknown");
+//            overlayView.draw(boundingBox, scaleX, scaleY, "unknown");
 
 //            Pair<String, Float> output = recognize(inputImage.getBitmapInternal(), boundingBox);
-//            String label = output.second >= 1.0f ? "unknown" : output.first;
+//            String timestamp = String.valueOf(System.currentTimeMillis());
 //
-//            overlayView.draw(new RectF(boundingBox), scaleX, scaleY, label);
-        } else {
-            overlayView.draw(null, 1.0f, 1.0f, "unknown");
-        }
+//            if(output.second >= 50.0f){
+//                String recognizedName = output.first;
+//                if(recognizedName == null){
+//                    recognizedName = "Unknown";
+//                }
+//                MQTT.sendFaceMatch(timestamp,recognizedName);
+//                Log.d(TAG, "Face recognized: " + recognizedName + ", timestamp: " + timestamp);
+//            }
 
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            MQTT.sendFaceMatch(timestamp,"Unknown");
+            Log.d(TAG, "Face recognized: " + "Unknown" + ", timestamp: " + timestamp);
+        }
     }
 
     // Using TFLite to recognize
-//    private Pair<String, Float> recognize(Bitmap bitmap, Rect boundingBox) {
-//        float minDistance = Float.MAX_VALUE;
-//        String name = null;
-//
-//        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
-//        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
-//
-//        Object[] inputArray = {input};
-//        Map<Integer, Object> outputMap = new HashMap<>();
-//        embeddings = new float[1][OUTPUT_SIZE];
-//        outputMap.put(0, embeddings);
-//
-//        tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
-//
-//        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
-//            float[] knownEmb = ((float[][]) entry.getValue().getExtra())[0];
-//            float distance = 0;
-//            for (int i = 0; i < embeddings[0].length; i++) {
-//                float diff = embeddings[0][i] - knownEmb[i];
-//                distance += diff * diff;
-//            }
-//            if (distance < minDistance) {
-//                minDistance = distance;
-//                name = entry.getKey();
-//            }
-//        }
-//
-//        return new Pair<>(name, minDistance);
-//    }
+    private Pair<String, Float> recognize(Bitmap bitmap, Rect boundingBox) {
+        float minDistance = Float.MAX_VALUE;
+        String name = null;
+
+        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
+        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
+
+        Object[] inputArray = {input};
+        Map<Integer, Object> outputMap = new HashMap<>();
+        embeddings = new float[1][OUTPUT_SIZE];
+        outputMap.put(0, embeddings);
+
+        tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
+
+        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
+            float[] knownEmb = ((float[][]) entry.getValue().getExtra())[0];
+            float distance = 0;
+            for (int i = 0; i < embeddings[0].length; i++) {
+                float diff = embeddings[0][i] - knownEmb[i];
+                distance += diff * diff;
+            }
+            if (distance < minDistance) {
+                minDistance = distance;
+                name = entry.getKey();
+            }
+        }
+
+        return new Pair<>(name, minDistance);
+    }
 
     //Loading model
     private void loadModel() {

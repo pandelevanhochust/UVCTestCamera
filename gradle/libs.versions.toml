@@ -11,7 +11,11 @@ constraintlayout = "2.0.4"
 mlkit-face-detection = "16.1.5"
 tflite = "2.10.0"
 visionCommon = "16.1.0"
-#uiGraphicsAndroid = "1.7.8"
+
+paho-mqtt = "1.2.5"
+paho-android = "1.1.1"
+jackson = "2.15.1"
+
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -26,7 +30,14 @@ mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", ve
 
 tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.ref = "tflite" }
 vision-common = { group = "com.google.mlkit", name = "vision-common", version.ref = "visionCommon" }
-#ui-graphics-android = { group = "androidx.compose.ui", name = "ui-graphics-android", version.ref = "uiGraphicsAndroid" }
+
+paho-mqtt = { group = "org.eclipse.paho", name = "org.eclipse.paho.client.mqttv3", version.ref = "paho-mqtt" }
+paho-android = { group = "org.eclipse.paho", name = "org.eclipse.paho.android.service", version.ref = "paho-android" }
+
+
+jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson" }
+jackson-core = { group = "com.fasterxml.jackson.core", name = "jackson-core", version.ref = "jackson" }
+jackson-annotations = { group = "com.fasterxml.jackson.core", name = "jackson-annotations", version.ref = "jackson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "UVCTestCamera"
-include(":app")
+include(":app",":backend")
  

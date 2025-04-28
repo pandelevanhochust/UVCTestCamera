@@ -59,8 +59,15 @@ plugins {
         implementation(libs.tensorflow.lite)
         implementation(libs.vision.common)
 
+        implementation(libs.paho.mqtt)
+        implementation(libs.paho.android)
+
         testImplementation(libs.junit)
         androidTestImplementation(libs.ext.junit)
         androidTestImplementation(libs.espresso.core)
+
+        implementation(libs.jackson.databind)
+        implementation(libs.jackson.core)
+        implementation(libs.jackson.annotations)
     }
 
