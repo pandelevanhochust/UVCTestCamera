@@ -5,17 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e02d4c70-782c-44b9-94cb-37bc302a748c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/../config.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../src/main/assets/config.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/backend/MQTT.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../.idea/gradle.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/../build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/main/AndroidManifest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/AndroidManifest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/UIComponents/CameraPreview.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/UIComponents/CameraPreview.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/backend/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../gradle/libs.versions.toml" beforeDir="false" afterPath="$PROJECT_DIR$/../../gradle/libs.versions.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../settings.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/../../settings.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/MainActivity.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/MainActivity.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/backend/MQTT.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/com/example/uvctestcamera/backend/MQTT.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -65,6 +57,31 @@
       <recent name="D:\CODIng\ProjectII\UVCTestCamera\app\backend" />
     </key>
   </component>
+  <component name="RunManager">
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="backend" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -86,6 +103,8 @@
       <workItem from="1745487370805" duration="6187000" />
       <workItem from="1745734540886" duration="9908000" />
       <workItem from="1745833413092" duration="5010000" />
+      <workItem from="1746450342286" duration="46000" />
+      <workItem from="1746526739604" duration="530000" />
     </task>
     <servers />
   </component>

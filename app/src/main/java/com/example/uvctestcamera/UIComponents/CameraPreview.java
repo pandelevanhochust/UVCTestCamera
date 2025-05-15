@@ -18,6 +18,7 @@ import androidx.fragment.app.Fragment;
 import com.example.uvctestcamera.FaceProcessor;
 import com.example.uvctestcamera.Faces;
 import com.example.uvctestcamera.R;
+import com.example.uvctestcamera.backend.Database;
 import com.example.uvctestcamera.backend.MQTT;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
@@ -32,6 +33,7 @@ import com.serenegiant.widget.UVCCameraTextureView;
 import com.serenegiant.usb.UVCCamera;
 import com.serenegiant.opencv.ImageProcessor;
 
+import org.json.JSONArray;
 import org.tensorflow.lite.Interpreter;
 
 import java.io.FileInputStream;
@@ -44,9 +46,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.uvctestcamera.databinding.CameraPreviewLayoutBinding;
-
 import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
-
 
 public class CameraPreview extends Fragment implements  IFrameCallback {
 
@@ -61,13 +61,12 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     private static final int PREVIEW_MODE = 1;
 
     private static final String TAG = "AndroidUSBCamera";
-
     private CameraPreviewLayoutBinding CameraViewBinding;
 
     GraphicOverlay overlayView;
-    private Interpreter tfLite;
+    public static Interpreter tfLite;
     private float[][] embeddings;
-    private final HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
+    public static HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
     private FaceDetector faceDetector;
 
     private static final int INPUT_SIZE = 112;
@@ -78,7 +77,6 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     protected ImageProcessor mImageProcessor;
     protected SurfaceView mResultView;
 
-    //Limit Frame Analyzed
     private long lastAnalyzedTime = 0;
     private static final long ANALYZE_INTERVAL_MS = 500;
 
@@ -104,7 +102,6 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
         usbMonitor = new USBMonitor(requireContext(),deviceConnectListener);
         loadModel();
         setupFaceDetector();
-
         usbMonitor.register();
         Log.d(TAG,"Reach onViewCreated");
     }
@@ -133,6 +130,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
             }
         });
     }
+
     private final USBMonitor.OnDeviceConnectListener deviceConnectListener
             = new USBMonitor.OnDeviceConnectListener() {
 
@@ -221,6 +219,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     }
 
     private void onFacesDetected(List<Face> faces, InputImage inputImage){
+
         overlayView.clear();
 
         if (!faces.isEmpty()) {
@@ -231,19 +230,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
             float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
             float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
 
-//            overlayView.draw(boundingBox, scaleX, scaleY, "unknown");
-
-//            Pair<String, Float> output = recognize(inputImage.getBitmapInternal(), boundingBox);
-//            String timestamp = String.valueOf(System.currentTimeMillis());
-//
-//            if(output.second >= 50.0f){
-//                String recognizedName = output.first;
-//                if(recognizedName == null){
-//                    recognizedName = "Unknown";
-//                }
-//                MQTT.sendFaceMatch(timestamp,recognizedName);
-//                Log.d(TAG, "Face recognized: " + recognizedName + ", timestamp: " + timestamp);
-//            }
+            Pair<String, Float> output = recognize(inputImage.getBitmapInternal(), boundingBox);
 
             String timestamp = String.valueOf(System.currentTimeMillis());
             MQTT.sendFaceMatch(timestamp,"Unknown");
@@ -254,7 +241,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     // Using TFLite to recognize
     private Pair<String, Float> recognize(Bitmap bitmap, Rect boundingBox) {
         float minDistance = Float.MAX_VALUE;
-        String name = null;
+        String name = "unknown";
 
         Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
         ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
@@ -266,15 +253,17 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
         tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
 
-        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
-            float[] knownEmb = ((float[][]) entry.getValue().getExtra())[0];
-            float distance = 0;
+        for (Map.Entry<String, Faces.Recognition> entry : CameraPreview.savedFaces.entrySet()) {
+            float[] known = ((float[][]) entry.getValue().getExtra())[0];
+            float dist = 0;
             for (int i = 0; i < embeddings[0].length; i++) {
-                float diff = embeddings[0][i] - knownEmb[i];
-                distance += diff * diff;
+                float diff = embeddings[0][i] - known[i];
+                dist += diff * diff;
             }
-            if (distance < minDistance) {
-                minDistance = distance;
+            dist = (float) Math.sqrt(dist);
+
+            if (dist < minDistance) {
+                minDistance = dist;
                 name = entry.getKey();
             }
         }
@@ -310,8 +299,8 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     }
 
     //Load savedFaces from Backend
-    public void loadFaces(){}//
 
+    //Analyze frames
     protected void startImageProcessor(final int processing_width, final int processing_height) {
         if (DEBUG) Log.v(TAG, "startImageProcessor:");
         mIsRunning = true;

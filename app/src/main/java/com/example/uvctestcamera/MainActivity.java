@@ -15,12 +15,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import com.example.uvctestcamera.UIComponents.CameraPreview;
+import com.example.uvctestcamera.backend.Database;
 import com.example.uvctestcamera.backend.MQTT;
 import com.serenegiant.usb.USBMonitor;
 import com.serenegiant.usb.USBMonitor.UsbControlBlock;
 import com.serenegiant.usbcameracommon.UVCCameraHandler;
 import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
+import org.json.JSONException;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -46,8 +48,16 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         Log.d(TAG,"Reach MQTT config");
+
         MQTT.loadConfig(this);
-        MQTT.cleanCredentials();
+        MQTT.db_handler = new Database(getApplicationContext());
+        MQTT.db_handler.hihi();
+        try {
+            MQTT.db_handler.getAllUserSchedules();
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        }
+
         MQTT.start();
 
         ImageButton btnIdCard = findViewById(R.id.btn_id_card);

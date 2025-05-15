@@ -2,19 +2,24 @@ package com.example.uvctestcamera.backend;
 
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Camera;
 import android.util.Log;
+import com.example.uvctestcamera.Faces;
+import com.example.uvctestcamera.UIComponents.CameraPreview;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.*;
-import java.util.Map;
-import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 public class MQTT {
-
     private static MqttClient client;
     private static String telemetry_topic;
     private static String rpc_topic;
@@ -30,6 +35,9 @@ public class MQTT {
     private static boolean provisioned = false;
     private static String host;
     private static String port;
+    private static String device_name = "42:A1:F6:6C:45:C7";
+
+    public static Database db_handler;
 
     private static Context appContext;
 
@@ -75,6 +83,7 @@ public class MQTT {
             if (credentialsExist()) {
                 connectWithCredentials();
             } else {
+                cleanCredentials();
                 provisionDevice();
             }
         } catch (Exception e) {
@@ -127,7 +136,6 @@ public class MQTT {
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }
-
                                 try {
                                     connectWithCredentials();
                                 } catch (MqttException e) {
@@ -158,7 +166,8 @@ public class MQTT {
                 JSONObject provisionRequest = new JSONObject();
                 provisionRequest.put("provisionDeviceKey", provision_device_key);
                 provisionRequest.put("provisionDeviceSecret", provision_device_secret);
-                provisionRequest.put("deviceName", generateDeviceName());
+                //Select devices here
+                provisionRequest.put("deviceName", device_name);
 
                 MqttMessage provisionMessage = new MqttMessage(provisionRequest.toString().getBytes());
                 provisionMessage.setQos(pubQos);
@@ -197,10 +206,17 @@ public class MQTT {
 
             client.setCallback(new MqttCallback() {
                 public void messageArrived(String topic, MqttMessage message) throws Exception {
-                    String payload = new String(message.getPayload());
+
+                    byte[] JSONpayload = message.getPayload();
+                    String payload = new String(JSONpayload, StandardCharsets.UTF_8);
                     Log.d(TAG,"[MQTT] Received RPC on topic: " + topic);
                     Log.d(TAG,"[MQTT] Message: " + payload);
-                    handleRpc(topic, payload);
+
+                    if(topic != null && topic.startsWith("v1/devices/me/rpc/request/")){
+                        handleRpc(topic, payload);
+                    }else{
+                        Log.d(TAG,"[MQTT] Skipped non-RPC message.");
+                    }
                 }
 
                 public void connectionLost(Throwable cause) {
@@ -217,17 +233,24 @@ public class MQTT {
             Log.d(TAG,rpc_topic);
 
             client.subscribe(rpc_topic, subQos);
+//            if(CameraPreview.savedFaces == null ){
+                db_handler.loadFacesfromSQL();
+//                Log.d(TAG, "Loading new Facdes set" + CameraPreview.savedFaces);
+//            }
 
             Log.d(TAG,"Reach subscribe");
-            new Thread(() -> sendTelemetryLoop()).start();
+//            new Thread(() -> sendTelemetryLoop()).start();
         }
     }
 
     private static void handleRpc(String topic, String payload) {
+        final String TAG_RPC = "handleRPC";
         try {
             JSONObject json = new JSONObject(payload);
             String method = json.optString("method");
             JSONObject params = json.optJSONObject("params");
+
+            Log.d(TAG_RPC, "Pay load recieved" + params);
 
             if (method.equals("getState") || method.equals("twoWay")) {
                 JSONObject response = new JSONObject();
@@ -237,8 +260,19 @@ public class MQTT {
                 client.publish(responseTopic, new MqttMessage(response.toString().getBytes()));
                 System.out.println("[RPC] Replied device state.");
             } else if (method.equals("userSchedule")) {
+                Log.d(TAG_RPC,"Reach userSchedule method");
+
                 System.out.println("[RPC] userSchedule params: " + params.toString());
                 JSONObject response = new JSONObject().put("response", "ok");
+
+                if(db_handler != null){
+                    Log.d(TAG_RPC,"Insert into database" + payload);
+                    db_handler.insertUserSchedule(params);
+                    db_handler.getAllUserSchedules();
+                    db_handler.loadFacesfromSQL();
+                }else{
+                    Log.d(TAG_RPC,"Database is null");
+                }
 
                 String responseTopic = topic.replace("request", "response");
                 client.publish(responseTopic, new MqttMessage(response.toString().getBytes()));
@@ -253,9 +287,7 @@ public class MQTT {
         while (true) {
             try {
                 JSONObject telemetry = new JSONObject();
-                JSONObject status = new JSONObject();
-                status.put("timestamp", System.currentTimeMillis());
-                telemetry.put("status", status);
+                telemetry.put("status", System.currentTimeMillis());
 
                 MqttMessage message = new MqttMessage(telemetry.toString().getBytes());
                 message.setQos(pubQos);
@@ -270,7 +302,13 @@ public class MQTT {
     }
 
     private static boolean credentialsExist() {
-        return new File("credentials").exists();
+        try {
+            File credentialsFile = new File(appContext.getFilesDir(), "credentials");
+            return credentialsFile.exists();
+        } catch (Exception e) {
+            Log.e(TAG, "[MQTT] Error checking credentials file: " + e.getMessage());
+            return false;
+        }
     }
 
     private static String getCredentials(Context context, String defaultUsername) {
@@ -325,11 +363,10 @@ public class MQTT {
         }
     }
 
-    private static String generateDeviceName() {
-        long mac = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
-        return String.format("%02X:%02X:%02X:%02X:%02X:%02X",
-                (mac >> 40) & 0xff, (mac >> 32) & 0xff, (mac >> 24) & 0xff,
-                (mac >> 16) & 0xff, (mac >> 8) & 0xff, mac & 0xff);
+    private static String getFormattedTimestamp() {
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm dd/MM/yyyy", Locale.getDefault());
+        Date now = new Date();
+        return sdf.format(now);
     }
 
     public static void sendFaceMatch(String timestamp, String username) {
@@ -340,11 +377,8 @@ public class MQTT {
             }
 
             JSONObject payload = new JSONObject();
-//            JSONObject entryExit = new JSONObject();
-            payload.put("timestamp", timestamp);
-            payload.put("username", username);
-//            entryExit.put("id", UUID.randomUUID().toString());
-//            payload.put("entry_exit_history", entryExit);
+            payload.put("timestamp", getFormattedTimestamp());
+            payload.put("username", "Le Van Toan");
 
             MqttMessage message = new MqttMessage(payload.toString().getBytes());
             message.setQos(1);
@@ -355,6 +389,18 @@ public class MQTT {
             e.printStackTrace();
         }
     }
+
+
+//    public static HashMap<String, Faces.Recognition> loadFaces(){
+//        JSONArray resultArray = db.getAllUserSchedules();
+//        HashMap<String,Faces.Recognition> faces = new HashMap<>();
+//
+//        resultArray
+//
+//        return faces;
+//    }
+
+//    public static JSONArray loadFacesfromDatabase() {}
 
     private static void retryConnect() {
         new Thread(() -> {
