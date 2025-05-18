@@ -67,7 +67,6 @@ public class FaceProcessor {
         return byteBuffer;
     }
 
-
     //private method
     private static Bitmap ImgtoBitmap(Image image) {
 

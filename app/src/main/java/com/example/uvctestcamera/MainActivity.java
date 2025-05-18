@@ -50,8 +50,8 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG,"Reach MQTT config");
 
         MQTT.loadConfig(this);
+//        MQTT.db_handler.dropUserScheduleTable();
         MQTT.db_handler = new Database(getApplicationContext());
-        MQTT.db_handler.hihi();
         try {
             MQTT.db_handler.getAllUserSchedules();
         } catch (JSONException e) {

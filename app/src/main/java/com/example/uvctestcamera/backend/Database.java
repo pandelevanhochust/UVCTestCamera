@@ -22,7 +22,7 @@ import java.util.Map;
 
 public class Database extends SQLiteOpenHelper {
 
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
     private static final String DATABASE_NAME = "database.db";
     private static final String TABLE_NAME = "user_schedule";
 
@@ -50,6 +50,7 @@ public class Database extends SQLiteOpenHelper {
     }
 
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        Log.d(TAG,"Reach onUpgrade table");
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_NAME);
         onCreate(db);
     }
@@ -86,15 +87,17 @@ public class Database extends SQLiteOpenHelper {
 
         byte[] faceImageBytes = null;
         String faceImageBase64 = params.getString("faceImage");
+        Log.d(TAG,"Param image: " + faceImageBase64);
 
         if (faceImageBase64 != null && !faceImageBase64.isEmpty()) {
-//            if (faceImageBase64.startsWith("data:image")) {
-//                faceImageBase64 = faceImageBase64.substring(faceImageBase64.indexOf(",") + 1);
-//            }
+            if (faceImageBase64.startsWith("data:image")) {
+                Log.d(TAG,"Subtracting + image: Yes");
+                faceImageBase64 = faceImageBase64.substring(faceImageBase64.indexOf(",") + 1);
+            }
 
             try {
                 faceImageBytes = Base64.decode(faceImageBase64, Base64.DEFAULT);
-                Log.d(TAG, "Decoded face image, bytes: " + faceImageBytes.length);
+                Log.d(TAG, "Decoded face image, bytes: " + faceImageBytes.toString());
             } catch (IllegalArgumentException e) {
                 Log.e(TAG, "Base64 decoding failed: " + e.getMessage());
             }
@@ -107,6 +110,7 @@ public class Database extends SQLiteOpenHelper {
         values.put("start_time", startTime);
         values.put("end_time", endTime);
         values.put("face_image", faceImageBytes);
+//        values.put("face_image", faceImageBase64);
 
         db.insert(TABLE_NAME, null, values);
         db.close();
@@ -124,15 +128,12 @@ public class Database extends SQLiteOpenHelper {
             obj.put("end_time", cursor.getString(cursor.getColumnIndexOrThrow("end_time")));
 
             byte[] face_image = cursor.getBlob(cursor.getColumnIndexOrThrow("face_image"));
-            String encodedImage = (face_image != null)
-                    ? "data:image/jpeg;base64," + Base64.encodeToString(face_image, Base64.NO_WRAP)
-                    : null;
 
 //            String encodedImage = (face_image != null)
 //                    ? Base64.encodeToString(face_image, Base64.NO_WRAP)
 //                    : null;
 
-            obj.put("face_image", encodedImage);
+            obj.put("face_image", face_image);
             Log.d(TAG, "Parsed row: " + obj.toString());
         } catch (Exception e) {
             Log.e(TAG, "Error parsing cursor: " + e.getMessage());
@@ -150,6 +151,7 @@ public class Database extends SQLiteOpenHelper {
             while (cursor.moveToNext()) {
                 String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
                 byte[] imageBlob = cursor.getBlob(cursor.getColumnIndexOrThrow("face_image"));
+                Log.d(TAG,"Here the byte image");
 
                 if (imageBlob == null) {
                     Log.w(TAG, "No image found for user: " + username);
@@ -178,10 +180,11 @@ public class Database extends SQLiteOpenHelper {
         }
     }
 
-    public void hihi(){
-        Log.d(TAG,"Reach here");
+    public void dropUserScheduleTable() {
+        Log.d(TAG, "Dropping user_schedule table...");
         SQLiteDatabase db = this.getWritableDatabase();
-        db.execSQL("DELETE FROM " + TABLE_NAME );
-        loadFacesfromSQL();
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_NAME);
+        Log.d(TAG, "Table dropped. Recreating...");
+        onCreate(db);  // Optional: recreate the table after dropping
     }
 }

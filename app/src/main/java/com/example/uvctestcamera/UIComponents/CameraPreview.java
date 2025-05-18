@@ -229,6 +229,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
             float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
             float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
+            overlayView.draw(boundingBox,scaleX,scaleY,"Unknown");
 
             Pair<String, Float> output = recognize(inputImage.getBitmapInternal(), boundingBox);
 
@@ -253,10 +254,15 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
         tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
 
+        if (CameraPreview.savedFaces == null || CameraPreview.savedFaces.isEmpty()) {
+            Log.w("Recognition", "No faces saved in memory");
+            return new Pair<>("unknown", -1f);
+        }
+
         for (Map.Entry<String, Faces.Recognition> entry : CameraPreview.savedFaces.entrySet()) {
             float[] known = ((float[][]) entry.getValue().getExtra())[0];
-            float dist = 0;
-            for (int i = 0; i < embeddings[0].length; i++) {
+            float dist = 0f;
+            for (int i = 0; i < OUTPUT_SIZE; i++) {
                 float diff = embeddings[0][i] - known[i];
                 dist += diff * diff;
             }
@@ -267,7 +273,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
                 name = entry.getKey();
             }
         }
-
+        Log.d("Recognition", "Closest match: " + name + " with distance: " + minDistance);
         return new Pair<>(name, minDistance);
     }
 
