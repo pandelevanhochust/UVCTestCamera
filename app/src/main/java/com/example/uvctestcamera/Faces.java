@@ -24,6 +24,13 @@ public interface Faces {
             this.extra = extra;
         }
 
+//        public void setDistance(float distance) {
+//            this.distance = distance;
+//        }
+//        public void getDistance(float distance) {
+//            return this.distance;
+//        }
+
         @Override
         public String toString(){
             String title = "";

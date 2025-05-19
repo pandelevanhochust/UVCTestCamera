@@ -80,6 +80,8 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     private long lastAnalyzedTime = 0;
     private static final long ANALYZE_INTERVAL_MS = 500;
 
+    private static final float MATCH_THRESHOLD = 1.0f;
+
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,@Nullable Bundle savedInstanceState) {
         CameraViewBinding = CameraPreviewLayoutBinding.inflate(inflater,container,false);
@@ -103,6 +105,8 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
         loadModel();
         setupFaceDetector();
         usbMonitor.register();
+        MQTT.db_handler.loadFacesfromSQL();
+        Log.d(TAG,"Here the savedFaces" + savedFaces);
         Log.d(TAG,"Reach onViewCreated");
     }
 
@@ -219,23 +223,23 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     }
 
     private void onFacesDetected(List<Face> faces, InputImage inputImage){
-
         overlayView.clear();
-
         if (!faces.isEmpty()) {
+            String detectedName = "Unknown";
             Face face = faces.get(0);
             Rect boundingBox = face.getBoundingBox();
             Log.d(TAG,"Bounding box" + boundingBox);
 
             float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
             float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
-            overlayView.draw(boundingBox,scaleX,scaleY,"Unknown");
 
             Pair<String, Float> output = recognize(inputImage.getBitmapInternal(), boundingBox);
+            detectedName = output.first;
 
+            overlayView.draw(boundingBox,scaleX,scaleY,detectedName);
             String timestamp = String.valueOf(System.currentTimeMillis());
-            MQTT.sendFaceMatch(timestamp,"Unknown");
-            Log.d(TAG, "Face recognized: " + "Unknown" + ", timestamp: " + timestamp);
+//            MQTT.sendFaceMatch(timestamp,"Unknown");
+            Log.d(TAG, "Face recognized: " +  detectedName + ", timestamp: " + timestamp);
         }
     }
 
@@ -261,16 +265,22 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
         for (Map.Entry<String, Faces.Recognition> entry : CameraPreview.savedFaces.entrySet()) {
             float[] known = ((float[][]) entry.getValue().getExtra())[0];
+//            Log.d(TAG,"Here the face in the savedFaces " + known.length);
             float dist = 0f;
             for (int i = 0; i < OUTPUT_SIZE; i++) {
                 float diff = embeddings[0][i] - known[i];
                 dist += diff * diff;
             }
             dist = (float) Math.sqrt(dist);
+            Log.d(TAG,"Here the distance" + dist);
 
             if (dist < minDistance) {
                 minDistance = dist;
                 name = entry.getKey();
+            }
+
+            if (minDistance > MATCH_THRESHOLD) {
+                name = "Unknown";
             }
         }
         Log.d("Recognition", "Closest match: " + name + " with distance: " + minDistance);

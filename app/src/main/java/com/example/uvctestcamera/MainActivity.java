@@ -50,13 +50,13 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG,"Reach MQTT config");
 
         MQTT.loadConfig(this);
-//        MQTT.db_handler.dropUserScheduleTable();
         MQTT.db_handler = new Database(getApplicationContext());
         try {
             MQTT.db_handler.getAllUserSchedules();
         } catch (JSONException e) {
             throw new RuntimeException(e);
         }
+//        MQTT.db_handler.dropUserScheduleTable();
 
         MQTT.start();
 
@@ -68,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "Camera button clicked");
             showFragment(new CameraPreview());
         });
+        Log.d(TAG,"Here the camera Preview");
+        showFragment(new CameraPreview());
     }
 
     private void showFragment(Fragment fragment){

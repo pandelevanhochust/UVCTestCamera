@@ -16,6 +16,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +31,9 @@ public class Database extends SQLiteOpenHelper {
     private static final int OUTPUT_SIZE = 192;
 
     private static final String TAG = "Database";
+
+    private static final int PREVIEW_WIDTH = 640;
+    private static final int PREVIEW_HEIGHT = 480;
 
     public Database(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -91,7 +95,7 @@ public class Database extends SQLiteOpenHelper {
 
         if (faceImageBase64 != null && !faceImageBase64.isEmpty()) {
             if (faceImageBase64.startsWith("data:image")) {
-                Log.d(TAG,"Subtracting + image: Yes");
+//                Log.d(TAG,"Subtracting + image: Yes");/
                 faceImageBase64 = faceImageBase64.substring(faceImageBase64.indexOf(",") + 1);
             }
 
@@ -159,12 +163,21 @@ public class Database extends SQLiteOpenHelper {
                 }
 
                 Bitmap bitmap = BitmapFactory.decodeByteArray(imageBlob, 0, imageBlob.length);
-                if (bitmap == null) {
+
+//                Bitmap bmp = BitmapFactory.decodeFile("assets/temp.jpg");
+//                ByteArrayOutputStream blob = new ByteArrayOutputStream();
+//                bmp.compress(Bitmap.CompressFormat.PNG, 0 /* Ignored for PNGs */, blob);
+//                byte[] bitmapdata = blob.toByteArray();
+//                Bitmap bitmap = BitmapFactory.decodeByteArray(bitmapdata, 0, bitmapdata.length);
+
+
+                if  (bitmap == null || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) {
                     Log.e(TAG, "Bitmap decode failed for user: " + username);
                     continue;
                 }
+                Log.d(TAG,"convert bytes to buffer success");
 
-                ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(bitmap);
+                ByteBuffer input = FaceProcessor.convertBitmapToByteBufferinDatabase(bitmap);
                 float[][] embedding = new float[1][OUTPUT_SIZE];
                 Object[] inputArray = {input};
                 Map<Integer, Object> outputMap = new HashMap<>();
@@ -174,6 +187,7 @@ public class Database extends SQLiteOpenHelper {
 
                 Faces.Recognition face = new Faces.Recognition(username, username, 0f);
                 face.setExtra(new float[][]{embedding[0]});
+                Log.d(TAG,"add the faces" + face.getExtra());
                 CameraPreview.savedFaces.put(username, face);
             }
             cursor.close();

@@ -67,6 +67,31 @@ public class FaceProcessor {
         return byteBuffer;
     }
 
+    // This is used in the android device
+    public static ByteBuffer convertBitmapToByteBufferinDatabase(Bitmap bitmap) {
+        int inputSize = 112;
+
+        Bitmap resized = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true);
+
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
+        byteBuffer.order(ByteOrder.nativeOrder());
+
+        int[] intValues = new int[inputSize * inputSize];
+        resized.getPixels(intValues, 0, inputSize, 0, 0, inputSize, inputSize);
+
+        int pixel = 0;
+        for (int i = 0; i < inputSize; ++i) {
+            for (int j = 0; j < inputSize; ++j) {
+                final int val = intValues[pixel++];
+                byteBuffer.putFloat(((val >> 16) & 0xFF) / 255.0f); // R
+                byteBuffer.putFloat(((val >> 8) & 0xFF) / 255.0f);  // G
+                byteBuffer.putFloat((val & 0xFF) / 255.0f);         // B
+            }
+        }
+        return byteBuffer;
+    }
+
+
     //private method
     private static Bitmap ImgtoBitmap(Image image) {
 

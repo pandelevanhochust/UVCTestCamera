@@ -234,7 +234,7 @@ public class MQTT {
 
             client.subscribe(rpc_topic, subQos);
 //            if(CameraPreview.savedFaces == null ){
-                db_handler.loadFacesfromSQL();
+//                db_handler.loadFacesfromSQL();
 //                Log.d(TAG, "Loading new Facdes set" + CameraPreview.savedFaces);
 //            }
 
@@ -378,7 +378,7 @@ public class MQTT {
 
             JSONObject payload = new JSONObject();
             payload.put("timestamp", getFormattedTimestamp());
-            payload.put("username", "Le Van Toan");
+            payload.put("username", username);
 
             MqttMessage message = new MqttMessage(payload.toString().getBytes());
             message.setQos(1);
