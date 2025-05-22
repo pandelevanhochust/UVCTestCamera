@@ -246,7 +246,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     // Using TFLite to recognize
     private Pair<String, Float> recognize(Bitmap bitmap, Rect boundingBox) {
         float minDistance = Float.MAX_VALUE;
-        String name = "unknown";
+        String bestMatch = "Unknown";
 
         Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
         ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
@@ -260,31 +260,33 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
         if (CameraPreview.savedFaces == null || CameraPreview.savedFaces.isEmpty()) {
             Log.w("Recognition", "No faces saved in memory");
-            return new Pair<>("unknown", -1f);
+            return new Pair<>("Unknown", -1f);
         }
 
         for (Map.Entry<String, Faces.Recognition> entry : CameraPreview.savedFaces.entrySet()) {
             float[] known = ((float[][]) entry.getValue().getExtra())[0];
-//            Log.d(TAG,"Here the face in the savedFaces " + known.length);
             float dist = 0f;
+
             for (int i = 0; i < OUTPUT_SIZE; i++) {
                 float diff = embeddings[0][i] - known[i];
                 dist += diff * diff;
             }
             dist = (float) Math.sqrt(dist);
-            Log.d(TAG,"Here the distance" + dist);
+
+            Log.d(TAG, "Distance to " + entry.getKey() + ": " + dist);
 
             if (dist < minDistance) {
                 minDistance = dist;
-                name = entry.getKey();
-            }
-
-            if (minDistance > MATCH_THRESHOLD) {
-                name = "Unknown";
+                bestMatch = entry.getKey();
             }
         }
-        Log.d("Recognition", "Closest match: " + name + " with distance: " + minDistance);
-        return new Pair<>(name, minDistance);
+
+        if (minDistance > MATCH_THRESHOLD) {
+            bestMatch = "Unknown";
+        }
+
+        Log.d("Recognition", "Closest match: " + bestMatch + " with distance: " + minDistance);
+        return new Pair<>(bestMatch, minDistance);
     }
 
     //Loading model

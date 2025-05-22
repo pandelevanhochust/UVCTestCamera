@@ -57,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
             throw new RuntimeException(e);
         }
 //        MQTT.db_handler.dropUserScheduleTable();
-
+//          MQTT.db_handler.loadFacesfromSQL();
         MQTT.start();
 
         ImageButton btnIdCard = findViewById(R.id.btn_id_card);
