@@ -22,11 +22,11 @@ public class GraphicOverlay extends View {
     public GraphicOverlay(Context context, AttributeSet attrs) {
         super(context, attrs);
 
-        rectPaint.setColor(0xFFFF0000); // 🔴 Red
+        rectPaint.setColor(0xFFFF0000); //Red
         rectPaint.setStyle(Paint.Style.STROKE);
         rectPaint.setStrokeWidth(5f);
 
-        textPaint.setColor(0xFFFF0000); // 🔴 Red
+        textPaint.setColor(0xFFFF0000); //Red
         textPaint.setTextSize(36f);
     }
 

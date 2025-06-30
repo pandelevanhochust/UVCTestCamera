@@ -92,11 +92,12 @@ public class MQTT {
     }
 
     private static void provisionDevice() {
-        Log.d(TAG, "[Provision] No credentials found. Start provisioning...");
+//        Log.d(TAG, "[Provision] No credentials found. Start provisioning...");
 
         new Thread(() -> {
             MqttClient provisionClient = null;
             try {
+                // New MQTT Client for Provisioning
                 provisionClient = new MqttClient(broker, "provision_" + UUID.randomUUID(), new MemoryPersistence());
 
                 MqttConnectOptions options = new MqttConnectOptions();
@@ -105,7 +106,7 @@ public class MQTT {
                 options.setKeepAliveInterval(60);
                 provisionClient.connect(options);
 
-                MqttClient finalProvisionClient = provisionClient; // for inner class
+                MqttClient finalProvisionClient = provisionClient;
                 provisionClient.setCallback(new MqttCallback() {
                     @Override
                     public void connectionLost(Throwable cause) {
@@ -144,14 +145,17 @@ public class MQTT {
                             }).start();
                         } else {
                             Log.e(TAG, "[Provision] Provision failed: " + json.optString("errorMsg"));
-                            try {
-                                if (finalProvisionClient.isConnected()) {
-                                    finalProvisionClient.disconnect();
+                            new Thread(() -> {
+                                try {
+                                    if (finalProvisionClient.isConnected()) {
+                                        finalProvisionClient.disconnect();  // ✅ now allowed
+                                        Log.d(TAG, "[Provision] Client disconnected after failure.");
+                                    }
+                                    finalProvisionClient.close();
+                                } catch (Exception e) {
+                                    e.printStackTrace();
                                 }
-                                finalProvisionClient.close();
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
+                            }).start();
                         }
                     }
 

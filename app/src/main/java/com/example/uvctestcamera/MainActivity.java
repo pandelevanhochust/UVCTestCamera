@@ -28,7 +28,6 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-
 import static android.content.ContentValues.TAG;
 import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
 
