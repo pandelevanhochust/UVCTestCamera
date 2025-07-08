@@ -44,6 +44,7 @@ import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import com.example.uvctestcamera.databinding.CameraPreviewLayoutBinding;
 import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
@@ -55,6 +56,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     private UVCCameraHandlerMultiSurface cameraHandler;
     private int surfaceId = 1;
 
+    //  NAVIS Screen size
     private static final int PREVIEW_WIDTH = 640;
     private static final int PREVIEW_HEIGHT = 480;
     private static final boolean USE_SURFACE_ENCODER = false;
@@ -135,6 +137,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
         });
     }
 
+    //Connect device with UVC Camera
     private final USBMonitor.OnDeviceConnectListener deviceConnectListener
             = new USBMonitor.OnDeviceConnectListener() {
 
@@ -209,6 +212,11 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+    }
+
+    @Override
     public void onFrame(ByteBuffer frame){
         Bitmap bitmap = FaceProcessor.ByteBufferToBitmap(frame);
         detectFace(bitmap);
@@ -217,7 +225,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     private void detectFace(Bitmap bitmap) {
         Log.d(TAG,"Reach detect face ");
         InputImage image = InputImage.fromBitmap(bitmap, 0);
-        faceDetector.process(image)
+        faceDetector.process(image) //Bitmap Image
                 .addOnSuccessListener(faces -> {Log.d(TAG, "Face detected");onFacesDetected(faces, image); })
                 .addOnFailureListener(e -> Log.e(TAG, "Face detection failed", e));
     }
@@ -228,25 +236,32 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
             String detectedName = "Unknown";
             Face face = faces.get(0);
             Rect boundingBox = face.getBoundingBox();
+            Faces.Recognition detectedFace = null;
+
             Log.d(TAG,"Bounding box" + boundingBox);
 
             float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
             float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
 
-            Pair<String, Float> output = recognize(inputImage.getBitmapInternal(), boundingBox);
+            Pair<String, Faces.Recognition> output = recognize(inputImage.getBitmapInternal(), boundingBox);
             detectedName = output.first;
+            detectedFace = output.second;
 
             overlayView.draw(boundingBox,scaleX,scaleY,detectedName);
-            String timestamp = String.valueOf(System.currentTimeMillis());
-//            MQTT.sendFaceMatch(timestamp,"Unknown");
+            String timestamp = MQTT.getFormattedTimestamp();
+
+            if(!Objects.equals(detectedName, "Unknown")){
+                MQTT.sendFaceMatch(detectedFace,timestamp);
+            }
             Log.d(TAG, "Face recognized: " +  detectedName + ", timestamp: " + timestamp);
         }
     }
 
     // Using TFLite to recognize
-    private Pair<String, Float> recognize(Bitmap bitmap, Rect boundingBox) {
+    private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
         float minDistance = Float.MAX_VALUE;
         String bestMatch = "Unknown";
+        Faces.Recognition bestFace = null;
 
         Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
         ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
@@ -260,7 +275,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
         if (CameraPreview.savedFaces == null || CameraPreview.savedFaces.isEmpty()) {
             Log.w("Recognition", "No faces saved in memory");
-            return new Pair<>("Unknown", -1f);
+            return new Pair<>("Unknown", null);
         }
 
         for (Map.Entry<String, Faces.Recognition> entry : CameraPreview.savedFaces.entrySet()) {
@@ -276,17 +291,20 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
             Log.d(TAG, "Distance to " + entry.getKey() + ": " + dist);
 
             if (dist < minDistance) {
-                minDistance = dist;
                 bestMatch = entry.getKey();
+                minDistance = dist;
+                bestFace = entry.getValue();
+                bestFace.setDistance(dist);
             }
+
+            bestFace.setDistance(minDistance);
         }
 
         if (minDistance > MATCH_THRESHOLD) {
             bestMatch = "Unknown";
         }
-
         Log.d("Recognition", "Closest match: " + bestMatch + " with distance: " + minDistance);
-        return new Pair<>(bestMatch, minDistance);
+        return new Pair<>(bestMatch,bestFace);
     }
 
     //Loading model
@@ -323,9 +341,9 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
         if (DEBUG) Log.v(TAG, "startImageProcessor:");
         mIsRunning = true;
         if (mImageProcessor == null) {
-            mImageProcessor = new ImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT, // src size
-                    new MyImageProcessorCallback(processing_width, processing_height));  // processing size
-            mImageProcessor.start(processing_width, processing_height);  // processing size
+            mImageProcessor = new ImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT, // NAVIS ScreenSize
+                    new MyImageProcessorCallback(processing_width, processing_height));  // callback function
+            mImageProcessor.start(processing_width, processing_height);  // processing frame
             final Surface surface = mImageProcessor.getSurface();
             mImageProcessorSurfaceId = surface != null ? surface.hashCode() : 0;
             if (mImageProcessorSurfaceId != 0) {
@@ -348,24 +366,20 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
         @Override
         public void onFrame(final ByteBuffer frame) {
             Log.d(TAG,"Reach this Frame");
-
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastAnalyzedTime < ANALYZE_INTERVAL_MS) {
                 return;
             }
-
             lastAnalyzedTime = currentTime;
-
             if (mFrame == null) {
                 Log.d(TAG,"Null Frame");
                 mFrame = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
             }
-
             try {
                 frame.rewind();
                 mFrame.copyPixelsFromBuffer(frame);
                 Log.d(TAG,"Passed to detection");
-                detectFace(Bitmap.createBitmap(mFrame));
+                detectFace(Bitmap.createBitmap(mFrame)); //Bitmap
             } catch (final Exception e) {
                 Log.w(TAG, e);
             }

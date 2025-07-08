@@ -253,6 +253,7 @@ public class MQTT {
             String method = json.optString("method");
             JSONObject params = json.optJSONObject("params");
 
+            Log.d(TAG_RPC,"Topic" + topic);
             Log.d(TAG_RPC, "Pay load recieved" + params);
 
             if (method.equals("getState") || method.equals("twoWay")) {
@@ -262,10 +263,11 @@ public class MQTT {
                 String responseTopic = topic.replace("request", "response");
                 client.publish(responseTopic, new MqttMessage(response.toString().getBytes()));
                 System.out.println("[RPC] Replied device state.");
-            } else if (method.equals("createPermission")) {
+            }
+            else if (method.equals("createPermission")) {
                 Log.d(TAG_RPC,"Reach Permission method");
+                Log.d(TAG_RPC,"createAttendance params: " + params.toString());
 
-                System.out.println("[RPC] createAttendance params: " + params.toString());
                 JSONObject response = new JSONObject().put("response", "ok");
 
                 if(db_handler != null){
@@ -366,44 +368,56 @@ public class MQTT {
         }
     }
 
-    private static String getFormattedTimestamp() {
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm dd/MM/yyyy", Locale.getDefault());
-        Date now = new Date();
-        return sdf.format(now);
+    public static String getFormattedTimestamp() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        return sdf.format(new Date());
     }
 
-    public static void sendFaceMatch(String timestamp, String username) {
+    public static void sendFaceMatch(Faces.Recognition detectedFace,String timestamp) {
         try {
+            String userId = detectedFace.getId();
+            String username = detectedFace.getName();
+
             if (client == null || !client.isConnected()) {
                 Log.e(TAG, "[sendFaceMatch] MQTT Client not connected. Skip sending face match.");
                 return;
             }
 
-            JSONObject payload = new JSONObject();
-            payload.put("timestamp", getFormattedTimestamp());
-            payload.put("username", username);
+            JSONObject payload = db_handler.findUserwithId(userId);
+            payload.put("Timestamp", timestamp);
+
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+
+            Date now = sdf.parse(timestamp);
+            Date startTime = sdf.parse(payload.getString("start_time"));
+            Date endTime = sdf.parse(payload.getString("end_time"));
+            String status = payload.getString("status");
+
+            Log.d(TAG, now +" " + startTime + " " + endTime);
+
+            long allowedLatestTimeMillis = startTime.getTime() + 15 * 60 * 1000;
+
+            if(status == null) {
+                if (now.getTime() <= allowedLatestTimeMillis) {
+                    payload.put("Status", "Check-in");
+                } else {
+                    payload.put("Status", "Check-in late");
+                }
+            } else {
+                payload.put("Status", "Check-out");
+            }
 
             MqttMessage message = new MqttMessage(payload.toString().getBytes());
             message.setQos(1);
             client.publish(telemetry_topic, message);
 
-            Log.d(TAG,"[Manual Face Match] Sent: " + payload.toString());
+            Log.d(TAG, "[sendFaceMatch] Published telemetry: " + payload.toString());
         } catch (Exception e) {
+            Log.e(TAG, "[sendFaceMatch] Error: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-
-//    public static HashMap<String, Faces.Recognition> loadFaces(){
-//        JSONArray resultArray = db.getAllUserSchedules();
-//        HashMap<String,Faces.Recognition> faces = new HashMap<>();
-//
-//        resultArray
-//
-//        return faces;
-//    }
-
-//    public static JSONArray loadFacesfromDatabase() {}
 
     private static void retryConnect() {
         new Thread(() -> {

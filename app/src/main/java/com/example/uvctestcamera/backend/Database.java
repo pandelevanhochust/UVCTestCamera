@@ -18,6 +18,7 @@
 
     import java.io.ByteArrayOutputStream;
     import java.nio.ByteBuffer;
+    import java.nio.ByteOrder;
     import java.util.HashMap;
     import java.util.Map;
 
@@ -48,9 +49,11 @@
                             "username TEXT, " +
                             "identify_number TEXT, " +
                             "start_time TEXT, " +
-                            "end_time TEXT, " +
+                            "end_time TEXT, "    +
                             "face_image BLOB, " +
-                            "lecturer_id TEXT)"
+                            "lecturer_id TEXT," +
+                            "status TEXT," +
+                            "face_embedding BLOB)"
             );
         }
 
@@ -93,39 +96,67 @@
             String CreatedAt = params.getString("CreatedAt");
 
             JSONArray students = params.getJSONArray("AttendanceStudents");
+
             for (int i = 0; i < students.length(); i++) {
                 JSONObject studentObj = students.getJSONObject(i).getJSONObject("Student");
 
                 String userId = studentObj.getString("UserId");
                 String username = studentObj.getString("UserName");
                 String identifyNumber = studentObj.getString("StudentCode");
-                String faceImageBase64 = studentObj.getString("FaceImage");
+                String faceImageBase64 = studentObj.getString("FaceImage"); //Base64 image
+                String email = params.getString("Email");
 
-                byte[] faceImageBytes = null;
+                byte[] faceImageBytes = null; //Convert base64 to bytes
                 if (faceImageBase64 != null && !faceImageBase64.isEmpty()) {
-                    if (faceImageBase64.startsWith("data:image")) {
-                        faceImageBase64 = faceImageBase64.substring(faceImageBase64.indexOf(",") + 1);
-                    }
-
+                    //No need to substring anymore
+//                    if (faceImageBase64.startsWith("data:image")) {
+//                        faceImageBase64 = faceImageBase64.substring(faceImageBase64.indexOf(",") + 1);
+//                    }
                     try {
                         faceImageBytes = Base64.decode(faceImageBase64, Base64.DEFAULT);
                         Log.d(TAG, "Decoded face image, bytes length: " + faceImageBytes.length);
+
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(faceImageBytes, 0, faceImageBytes.length);
+
+                        if  (bitmap == null || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) {
+                            Log.e(TAG, "Bitmap decode failed for user: " + username);
+                            continue;
+                        }
+                        Log.d(TAG,"convert bytes to buffer success");
+
+                        ByteBuffer input = FaceProcessor.convertBitmapToByteBufferinDatabase(bitmap);
+                        float[][] embedding = new float[1][OUTPUT_SIZE];
+                        Object[] inputArray = {input};
+                        Map<Integer, Object> outputMap = new HashMap<>();
+                        outputMap.put(0, embedding);
+                        CameraPreview.tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
+
+                        Faces.Recognition face = new Faces.Recognition(userId, username, 0f);
+                        face.setExtra(new float[][]{embedding[0]}); //Float value
+                        Log.d(TAG,"add the faces" + username +"-" + face.getExtra());
+
+                        CameraPreview.savedFaces.put(username, face);
+
+                        byte[] embeddingBytes = convertFloatArrayToByteArray(embedding[0]); // convert float to bytes
+
+                        ContentValues values = new ContentValues();
+                        values.put("user_id", userId);
+                        values.put("username", username);
+                        values.put("identify_number", identifyNumber);
+                        values.put("start_time", startTime);
+                        values.put("end_time", endTime);
+                        values.put("face_image", faceImageBytes);
+                        values.put("lecturer_id",lecturerId);
+//                        values.put("status",);
+                        values.put("face_embedding", embeddingBytes);
+
+                        db.insert(TABLE_NAME, null, values);
+                        Log.d(TAG, "Inserted user " + username + " successfully");
+
                     } catch (IllegalArgumentException e) {
                         Log.e(TAG, "Base64 decoding failed: " + e.getMessage());
                     }
                 }
-
-                ContentValues values = new ContentValues();
-                values.put("user_id", userId);
-                values.put("username", username);
-                values.put("identify_number", identifyNumber);
-                values.put("start_time", startTime);
-                values.put("end_time", endTime);
-                values.put("face_image", faceImageBytes);
-                values.put("lecturer_id",lecturerId);
-
-                db.insert(TABLE_NAME, null, values);
-                Log.d(TAG, "Inserted user " + username + " successfully");
             }
 
             db.close();
@@ -144,17 +175,35 @@
                 obj.put("lecturer_id", cursor.getString(cursor.getColumnIndexOrThrow("lecturer_id")));
 
                 byte[] face_image = cursor.getBlob(cursor.getColumnIndexOrThrow("face_image"));
-
-    //            String encodedImage = (face_image != null)
-    //                    ? Base64.encodeToString(face_image, Base64.NO_WRAP)
-    //                    : null;
-
                 obj.put("face_image", face_image);
-                Log.d(TAG, "Parsed row: " + obj.toString());
+
+                Log.d(TAG, "Parsed row: " + obj);
             } catch (Exception e) {
                 Log.e(TAG, "Error parsing cursor: " + e.getMessage());
             }
             return obj;
+        }
+
+        //Find user with its Id
+        public JSONObject findUserwithId(String userId) {
+            Log.d(TAG, "Reach findUserwithId: " + userId);
+            SQLiteDatabase db = this.getReadableDatabase();
+            JSONObject result = null;
+
+            Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME + " WHERE user_id = ?", new String[]{userId});
+
+            if (cursor != null) {
+                if (cursor.moveToFirst()) {
+                    result = cursortoJSON(cursor);
+                } else {
+                    Log.w(TAG, "No user found with ID: " + userId);
+                }
+                cursor.close();
+            } else {
+                Log.e(TAG, "Query returned null cursor for ID: " + userId);
+            }
+            db.close();
+            return result;
         }
 
         // Load Faces using for debugging database
@@ -162,45 +211,30 @@
             Log.d(TAG, "Reach loadFaces");
             CameraPreview.savedFaces.clear();
             SQLiteDatabase db = this.getReadableDatabase();
-            Cursor cursor = db.rawQuery("SELECT username, face_image FROM " + TABLE_NAME, null);
+            Cursor cursor = db.rawQuery("SELECT user_id, username,face_image, face_embedding FROM " + TABLE_NAME, null);
 
             if (cursor != null) {
                 while (cursor.moveToNext()) {
+                    String userId = cursor.getString(cursor.getColumnIndexOrThrow("user_id"));
                     String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
-                    byte[] imageBlob = cursor.getBlob(cursor.getColumnIndexOrThrow("face_image"));
+                    byte[] embeddingBytes = cursor.getBlob(cursor.getColumnIndexOrThrow("face_embedding"));
+                    byte[] faceImage = cursor.getBlob(cursor.getColumnIndexOrThrow("face_image"));
+
                     Log.d(TAG,"Here the byte image");
 
-                    if (imageBlob == null) {
-                        Log.w(TAG, "No image found for user: " + username);
+                    if(faceImage == null) {
+                        Log.w(TAG, "No face image found for user: " + username);
+                    }
+                    if (embeddingBytes == null) {
+                        Log.w(TAG, "No embedding found for user: " + username);
                         continue;
                     }
 
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(imageBlob, 0, imageBlob.length);
+                    float[] embeddingFloat = convertByteArrayToFloatArray(embeddingBytes);
 
-    //                Bitmap bmp = BitmapFactory.decodeFile("assets/temp.jpg");
-    //                ByteArrayOutputStream blob = new ByteArrayOutputStream();
-    //                bmp.compress(Bitmap.CompressFormat.PNG, 0 /* Ignored for PNGs */, blob);
-    //                byte[] bitmapdata = blob.toByteArray();
-    //                Bitmap bitmap = BitmapFactory.decodeByteArray(bitmapdata, 0, bitmapdata.length);
+                    Faces.Recognition face = new Faces.Recognition(userId, username, 0f);
+                    face.setExtra(new float[][]{embeddingFloat});
 
-
-                    if  (bitmap == null || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) {
-                        Log.e(TAG, "Bitmap decode failed for user: " + username);
-                        continue;
-                    }
-                    Log.d(TAG,"convert bytes to buffer success");
-
-                    ByteBuffer input = FaceProcessor.convertBitmapToByteBufferinDatabase(bitmap);
-                    float[][] embedding = new float[1][OUTPUT_SIZE];
-                    Object[] inputArray = {input};
-                    Map<Integer, Object> outputMap = new HashMap<>();
-                    outputMap.put(0, embedding);
-
-                    CameraPreview.tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
-
-                    Faces.Recognition face = new Faces.Recognition(username, username, 0f);
-                    face.setExtra(new float[][]{embedding[0]});
-                    Log.d(TAG,"add the faces" + face.getExtra());
                     CameraPreview.savedFaces.put(username, face);
                 }
                 cursor.close();
@@ -215,4 +249,20 @@
             Log.d(TAG, "Table dropped. Recreating...");
             onCreate(db);
         }
+
+        //These two for Float to Bytes Embedding Conversion
+        private byte[] convertFloatArrayToByteArray(float[] input) {
+            ByteBuffer buffer = ByteBuffer.allocate(input.length * 4);
+            buffer.order(ByteOrder.nativeOrder());
+            for (float f : input) buffer.putFloat(f);
+            return buffer.array();
+        }
+
+        private float[] convertByteArrayToFloatArray(byte[] input) {
+            ByteBuffer buffer = ByteBuffer.wrap(input).order(ByteOrder.nativeOrder());
+            float[] output = new float[input.length / 4];
+            buffer.asFloatBuffer().get(output);
+            return output;
+        }
+
     }

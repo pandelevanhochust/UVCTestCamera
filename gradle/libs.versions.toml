@@ -15,6 +15,7 @@ visionCommon = "16.1.0"
 paho-mqtt = "1.2.5"
 paho-android = "1.1.1"
 jackson = "2.15.1"
+protoliteWellKnownTypes = "18.0.1"
 
 
 [libraries]
@@ -38,6 +39,7 @@ paho-android = { group = "org.eclipse.paho", name = "org.eclipse.paho.android.se
 jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson" }
 jackson-core = { group = "com.fasterxml.jackson.core", name = "jackson-core", version.ref = "jackson" }
 jackson-annotations = { group = "com.fasterxml.jackson.core", name = "jackson-annotations", version.ref = "jackson" }
+protolite-well-known-types = { group = "com.google.firebase", name = "protolite-well-known-types", version.ref = "protoliteWellKnownTypes" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

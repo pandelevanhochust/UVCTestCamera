@@ -1,12 +1,10 @@
 package com.example.uvctestcamera;
 
-import android.annotation.SuppressLint;
-
 public interface Faces {
     class Recognition{
         private final String id;
         private final String name;
-        private final Float distance;
+        private Float distance;
         private Object extra;
 
         public Recognition(String id, String name, Float distance) {
@@ -16,20 +14,27 @@ public interface Faces {
             this.extra = null;
         }
 
+        public String getId(){
+            return this.id;
+        }
+
+        public String getName(){
+            return this.name;
+        }
+
         public Object getExtra(){
             return this.extra;
         }
-
         public void setExtra(Object extra){
             this.extra = extra;
         }
 
-//        public void setDistance(float distance) {
-//            this.distance = distance;
-//        }
-//        public void getDistance(float distance) {
-//            return this.distance;
-//        }
+        public void setDistance(float distance) {
+            this.distance = distance;
+        }
+        public Float getDistance(float distance) {
+            return this.distance = distance;
+        }
 
         @Override
         public String toString(){
