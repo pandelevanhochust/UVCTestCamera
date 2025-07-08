@@ -377,6 +377,7 @@ public class MQTT {
         try {
             String userId = detectedFace.getId();
             String username = detectedFace.getName();
+            String telemetryHeader = null;
 
             if (client == null || !client.isConnected()) {
                 Log.e(TAG, "[sendFaceMatch] MQTT Client not connected. Skip sending face match.");
@@ -386,29 +387,36 @@ public class MQTT {
             JSONObject payload = db_handler.findUserwithId(userId);
             payload.put("Timestamp", timestamp);
 
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            SimpleDateFormat stf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
 
-            Date now = sdf.parse(timestamp);
-            Date startTime = sdf.parse(payload.getString("start_time"));
-            Date endTime = sdf.parse(payload.getString("end_time"));
-            String status = payload.getString("status");
+            Date now = stf.parse(timestamp);
+            Date startTime = stf.parse(payload.getString("start_time"));
+            Date endTime = stf.parse(payload.getString("end_time"));
+            String status = payload.has("status") ? payload.getString("status") : null;
 
             Log.d(TAG, now +" " + startTime + " " + endTime);
 
             long allowedLatestTimeMillis = startTime.getTime() + 15 * 60 * 1000;
 
             if(status == null) {
+                telemetryHeader = "Attendance_check-in";
                 if (now.getTime() <= allowedLatestTimeMillis) {
                     payload.put("Status", "Check-in");
                 } else {
                     payload.put("Status", "Check-in late");
                 }
             } else {
+                telemetryHeader = "Attendance_check-out";
                 payload.put("Status", "Check-out");
             }
 
-            MqttMessage message = new MqttMessage(payload.toString().getBytes());
-            message.setQos(1);
+            //If you want to wrap the JSON into one single payload
+            JSONObject wrappedPayload = new JSONObject();
+            wrappedPayload.put(telemetryHeader, payload);
+
+            MqttMessage message = new MqttMessage(wrappedPayload.toString().getBytes());
+            message.setQos(pubQos);
             client.publish(telemetry_topic, message);
 
             Log.d(TAG, "[sendFaceMatch] Published telemetry: " + payload.toString());

@@ -365,7 +365,8 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
         @Override
         public void onFrame(final ByteBuffer frame) {
-            Log.d(TAG,"Reach this Frame");
+            //Log when needed
+//            Log.d(TAG,"Reach this Frame");
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastAnalyzedTime < ANALYZE_INTERVAL_MS) {
                 return;

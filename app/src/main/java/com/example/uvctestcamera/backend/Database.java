@@ -19,7 +19,11 @@
     import java.io.ByteArrayOutputStream;
     import java.nio.ByteBuffer;
     import java.nio.ByteOrder;
+    import java.text.ParseException;
+    import java.text.SimpleDateFormat;
+    import java.util.Date;
     import java.util.HashMap;
+    import java.util.Locale;
     import java.util.Map;
 
     public class Database extends SQLiteOpenHelper {
@@ -85,15 +89,21 @@
             }
         }
 
-        public void insertUserSchedule(JSONObject params) throws JSONException {
+        public void insertUserSchedule(JSONObject params) throws JSONException, ParseException {
             SQLiteDatabase db = this.getWritableDatabase();
 
+            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            SimpleDateFormat targetFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
 
             String lecturerId = params.getString("LecturerId");
             String DeviceId = params.getString("DeviceId");
-            String startTime = params.getString("StartTime");
-            String endTime = params.getString("EndTime");
-            String CreatedAt = params.getString("CreatedAt");
+            String startTime = params.getString("TimeStart");
+            String endTime = params.getString("TimeEnd");
+            Date parsedStart = isoFormat.parse(startTime);
+            Date parsedEnd = isoFormat.parse(endTime);
+
+            String formattedStart = targetFormat.format(parsedStart);
+            String formattedEnd = targetFormat.format(parsedEnd);
 
             JSONArray students = params.getJSONArray("AttendanceStudents");
 
@@ -104,14 +114,14 @@
                 String username = studentObj.getString("UserName");
                 String identifyNumber = studentObj.getString("StudentCode");
                 String faceImageBase64 = studentObj.getString("FaceImage"); //Base64 image
-                String email = params.getString("Email");
+                String email = studentObj.getString("Email");
 
                 byte[] faceImageBytes = null; //Convert base64 to bytes
                 if (faceImageBase64 != null && !faceImageBase64.isEmpty()) {
-                    //No need to substring anymore
-//                    if (faceImageBase64.startsWith("data:image")) {
-//                        faceImageBase64 = faceImageBase64.substring(faceImageBase64.indexOf(",") + 1);
-//                    }
+//                    No need to substring anymore
+                    if (faceImageBase64.startsWith("data:image")) {
+                        faceImageBase64 = faceImageBase64.substring(faceImageBase64.indexOf(",") + 1);
+                    }
                     try {
                         faceImageBytes = Base64.decode(faceImageBase64, Base64.DEFAULT);
                         Log.d(TAG, "Decoded face image, bytes length: " + faceImageBytes.length);
@@ -143,8 +153,8 @@
                         values.put("user_id", userId);
                         values.put("username", username);
                         values.put("identify_number", identifyNumber);
-                        values.put("start_time", startTime);
-                        values.put("end_time", endTime);
+                        values.put("start_time", formattedStart);
+                        values.put("end_time", formattedEnd);
                         values.put("face_image", faceImageBytes);
                         values.put("lecturer_id",lecturerId);
 //                        values.put("status",);

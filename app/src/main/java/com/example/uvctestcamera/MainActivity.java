@@ -57,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Use dropUserScheduleTable and loadFacesfromSQL for debugging database
-        MQTT.db_handler.dropUserScheduleTable();
+//        MQTT.db_handler.dropUserScheduleTable();
 //          MQTT.db_handler.loadFacesfromSQL();
         MQTT.start();
 
