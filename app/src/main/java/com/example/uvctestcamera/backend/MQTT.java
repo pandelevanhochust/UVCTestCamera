@@ -241,7 +241,6 @@ public class MQTT {
 //                db_handler.loadFacesfromSQL();
 //                Log.d(TAG, "Loading new Facdes set" + CameraPreview.savedFaces);
 //            }
-
             Log.d(TAG,"Reach subscribe");
 //            new Thread(() -> sendTelemetryLoop()).start();
         }
@@ -263,10 +262,10 @@ public class MQTT {
                 String responseTopic = topic.replace("request", "response");
                 client.publish(responseTopic, new MqttMessage(response.toString().getBytes()));
                 System.out.println("[RPC] Replied device state.");
-            } else if (method.equals("userSchedule")) {
-                Log.d(TAG_RPC,"Reach userSchedule method");
+            } else if (method.equals("createPermission")) {
+                Log.d(TAG_RPC,"Reach Permission method");
 
-                System.out.println("[RPC] userSchedule params: " + params.toString());
+                System.out.println("[RPC] createAttendance params: " + params.toString());
                 JSONObject response = new JSONObject().put("response", "ok");
 
                 if(db_handler != null){
@@ -478,8 +477,6 @@ public class MQTT {
 //                    saveCredentials(appContext, credentials);
 //                    provisioned = true;
 //
-//                    // 💥 NO disconnect provisionClient
-//                    // 💥 Directly connect real client
 //                    connectWithCredentials();
 //                } else {
 //                    Log.e(TAG, "[Provision] Provision failed: " + json.optString("errorMsg"));
