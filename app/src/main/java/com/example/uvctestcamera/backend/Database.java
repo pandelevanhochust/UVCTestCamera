@@ -40,6 +40,8 @@
         private static final int PREVIEW_WIDTH = 640;
         private static final int PREVIEW_HEIGHT = 480;
 
+        private static final String DEVICE_ID = "fb4ed650-5583-11f0-96c6-855152e3efab";
+
         public Database(Context context) {
             super(context, DATABASE_NAME, null, DATABASE_VERSION);
         }
@@ -57,7 +59,8 @@
                             "face_image BLOB, " +
                             "lecturer_id TEXT," +
                             "status TEXT," +
-                            "face_embedding BLOB)"
+                            "face_embedding BLOB," +
+                            "device_id TEXT)"
             );
         }
 
@@ -96,7 +99,7 @@
             SimpleDateFormat targetFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
 
             String lecturerId = params.getString("LecturerId");
-            String DeviceId = params.getString("DeviceId");
+            String deviceId = params.getString("DeviceId");
             String startTime = params.getString("TimeStart");
             String endTime = params.getString("TimeEnd");
             Date parsedStart = isoFormat.parse(startTime);
@@ -157,8 +160,9 @@
                         values.put("end_time", formattedEnd);
                         values.put("face_image", faceImageBytes);
                         values.put("lecturer_id",lecturerId);
-//                        values.put("status",);
+//                      values.put("status",);
                         values.put("face_embedding", embeddingBytes);
+                        values.put("device_id",deviceId);
 
                         db.insert(TABLE_NAME, null, values);
                         Log.d(TAG, "Inserted user " + username + " successfully");
@@ -183,6 +187,7 @@
                 obj.put("start_time", cursor.getString(cursor.getColumnIndexOrThrow("start_time")));
                 obj.put("end_time", cursor.getString(cursor.getColumnIndexOrThrow("end_time")));
                 obj.put("lecturer_id", cursor.getString(cursor.getColumnIndexOrThrow("lecturer_id")));
+                obj.put("device_id", cursor.getString(cursor.getColumnIndexOrThrow("device_id")));
 
                 byte[] face_image = cursor.getBlob(cursor.getColumnIndexOrThrow("face_image"));
                 obj.put("face_image", face_image);
@@ -221,7 +226,12 @@
             Log.d(TAG, "Reach loadFaces");
             CameraPreview.savedFaces.clear();
             SQLiteDatabase db = this.getReadableDatabase();
-            Cursor cursor = db.rawQuery("SELECT user_id, username,face_image, face_embedding FROM " + TABLE_NAME, null);
+            String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+
+            String sql = "SELECT user_id, username, face_image, face_embedding " +
+                    "FROM " + TABLE_NAME + " " +
+                    "WHERE start_time <= ? AND end_time >= ? AND device_id = ?";
+            Cursor cursor = db.rawQuery(sql, new String[]{now, now, DEVICE_ID});
 
             if (cursor != null) {
                 while (cursor.moveToNext()) {
@@ -274,5 +284,56 @@
             buffer.asFloatBuffer().get(output);
             return output;
         }
+
+        // Update user schedule with status (Check-in, Check-in late, Check-out)
+        public void updateUserSchedule(String userId, String status) {
+            SQLiteDatabase db = this.getWritableDatabase();
+
+            ContentValues values = new ContentValues();
+            values.put("status", status);
+
+            int rowsAffected = db.update(
+                    TABLE_NAME,
+                    values,
+                    "user_id = ?",
+                    new String[]{userId}
+            );
+
+            if (rowsAffected > 0) {
+                Log.d(TAG, "Updated status for user_id: " + userId + " to: " + status);
+            } else {
+                Log.w(TAG, "No row found to update for user_id: " + userId);
+            }
+
+            db.close();
+        }
+
+        public long getNextSessionEndTimeMillis(String deviceId) {
+            SQLiteDatabase db = this.getReadableDatabase();
+            long nextEndTime = -1;
+
+            String nowFormatted = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+
+            try (Cursor cursor = db.rawQuery(
+                    "SELECT end_time FROM " + TABLE_NAME +
+                            " WHERE device_id = ? AND end_time > ? ORDER BY end_time ASC LIMIT 1",
+                    new String[]{deviceId, nowFormatted})) {
+
+                if (cursor != null && cursor.moveToFirst()) {
+                    String endTimeStr = cursor.getString(0);
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+                    Date endDate = sdf.parse(endTimeStr);
+                    if (endDate != null) {
+                        nextEndTime = endDate.getTime();
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "⚠️ Error parsing end_time or executing query", e);
+            }
+
+            return nextEndTime;
+        }
+
+
 
     }

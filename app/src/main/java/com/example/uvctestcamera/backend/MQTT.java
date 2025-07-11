@@ -385,9 +385,10 @@ public class MQTT {
             }
 
             JSONObject payload = db_handler.findUserwithId(userId);
-            payload.put("Timestamp", timestamp);
+            Log.d(TAG,"Matching userId" + payload.toString());
 
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            payload.put("Timestamp", timestamp);
+//            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
             SimpleDateFormat stf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
 
             Date now = stf.parse(timestamp);
@@ -396,6 +397,7 @@ public class MQTT {
             String status = payload.has("status") ? payload.getString("status") : null;
 
             Log.d(TAG, now +" " + startTime + " " + endTime);
+            Log.d(TAG, "Current status" + status);
 
             long allowedLatestTimeMillis = startTime.getTime() + 15 * 60 * 1000;
 
@@ -407,6 +409,7 @@ public class MQTT {
                     payload.put("Status", "Check-in late");
                 }
             } else {
+//                if (now.getTime() <= allowedLatestTimeMillis){}
                 telemetryHeader = "Attendance_check-out";
                 payload.put("Status", "Check-out");
             }
@@ -414,6 +417,9 @@ public class MQTT {
             //If you want to wrap the JSON into one single payload
             JSONObject wrappedPayload = new JSONObject();
             wrappedPayload.put(telemetryHeader, payload);
+
+            String newStatus = payload.getString("Status");
+            db_handler.updateUserSchedule(userId, newStatus);
 
             MqttMessage message = new MqttMessage(wrappedPayload.toString().getBytes());
             message.setQos(pubQos);

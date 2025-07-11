@@ -5,6 +5,8 @@ import android.graphics.*;
 import android.hardware.usb.UsbDevice;
 import android.media.Image;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.util.Pair;
 
@@ -83,6 +85,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     private static final long ANALYZE_INTERVAL_MS = 500;
 
     private static final float MATCH_THRESHOLD = 1.0f;
+    private static final String DEVICE_ID = "fb4ed650-5583-11f0-96c6-855152e3efab";
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,@Nullable Bundle savedInstanceState) {
@@ -108,6 +111,41 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
         setupFaceDetector();
         usbMonitor.register();
         MQTT.db_handler.loadFacesfromSQL();
+
+        // Setup session monitor
+        Handler sessionMonitorHandler = new Handler(Looper.getMainLooper());
+        Runnable[] sessionMonitorRunnable = new Runnable[1];
+
+        sessionMonitorRunnable[0] = () -> {
+            long now = System.currentTimeMillis();
+            long nextEndMillis = MQTT.db_handler.getNextSessionEndTimeMillis(DEVICE_ID);
+
+            if (nextEndMillis > now) {
+                long delay = nextEndMillis - now;
+
+                if (delay <= 0 || delay > 24 * 60 * 60 * 1000) {
+                    Log.w(TAG, "⚠️ Delay abnormal, fallback to 5 min");
+                    delay = 5 * 60 * 1000;
+                }
+
+                Log.d(TAG, "⏰ Scheduling next face reload after session ends in " + delay / 1000 + "s");
+
+                sessionMonitorHandler.postDelayed(() -> {
+                    Log.d(TAG, "🔄 Reloading faces after session ended");
+                    MQTT.db_handler.loadFacesfromSQL();
+                    sessionMonitorHandler.post(sessionMonitorRunnable[0]);
+                }, delay);
+            } else {
+                Log.d(TAG, "🕒 No session found. Forcing reload and checking again in 5 minutes.");
+                MQTT.db_handler.loadFacesfromSQL();
+                sessionMonitorHandler.postDelayed(sessionMonitorRunnable[0], 5 * 60 * 1000);
+            }
+            Log.d(TAG,savedFaces.toString());
+            Log.d(TAG,"Here the savedFaces" + savedFaces);
+        };
+
+        sessionMonitorHandler.post(sessionMonitorRunnable[0]);
+
         Log.d(TAG,"Here the savedFaces" + savedFaces);
         Log.d(TAG,"Reach onViewCreated");
     }
@@ -209,6 +247,9 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
         usbMonitor.unregister();
         usbMonitor.destroy();
         CameraViewBinding = null;
+//        if (sessionMonitorHandler != null) {
+//            sessionMonitorHandler.removeCallbacksAndMessages(null);
+//        }
     }
 
     @Override
@@ -223,7 +264,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
     }
 
     private void detectFace(Bitmap bitmap) {
-        Log.d(TAG,"Reach detect face ");
+//        Log.d(TAG,"Reach detect face ");
         InputImage image = InputImage.fromBitmap(bitmap, 0);
         faceDetector.process(image) //Bitmap Image
                 .addOnSuccessListener(faces -> {Log.d(TAG, "Face detected");onFacesDetected(faces, image); })
@@ -379,7 +420,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
             try {
                 frame.rewind();
                 mFrame.copyPixelsFromBuffer(frame);
-                Log.d(TAG,"Passed to detection");
+                // Log.d(TAG,"Passed to detection");
                 detectFace(Bitmap.createBitmap(mFrame)); //Bitmap
             } catch (final Exception e) {
                 Log.w(TAG, e);
