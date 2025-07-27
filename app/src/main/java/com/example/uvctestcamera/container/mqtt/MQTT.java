@@ -1,17 +1,13 @@
-package com.example.uvctestcamera.backend;
+package com.example.uvctestcamera.container.mqtt;
 
 import android.content.Context;
 import android.content.res.AssetManager;
-import android.database.sqlite.SQLiteDatabase;
-import android.graphics.Camera;
 import android.util.Log;
-import com.example.uvctestcamera.Faces;
-import com.example.uvctestcamera.UIComponents.CameraPreview;
+import com.example.uvctestcamera.container.facedetection.Faces;
+import com.example.uvctestcamera.container.database.Database;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
-import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.*;

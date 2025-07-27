@@ -1,4 +1,4 @@
-    package com.example.uvctestcamera.backend;
+    package com.example.uvctestcamera.container.database;
 
     import android.content.ContentValues;
     import android.content.Context;
@@ -9,14 +9,13 @@
     import android.graphics.BitmapFactory;
     import android.util.Base64;
     import android.util.Log;
-    import com.example.uvctestcamera.FaceProcessor;
-    import com.example.uvctestcamera.Faces;
-    import com.example.uvctestcamera.UIComponents.CameraPreview;
+    import com.example.uvctestcamera.container.facedetection.FaceProcessor;
+    import com.example.uvctestcamera.container.facedetection.Faces;
+    import com.example.uvctestcamera.components.CameraPreview;
     import org.json.JSONArray;
     import org.json.JSONException;
     import org.json.JSONObject;
 
-    import java.io.ByteArrayOutputStream;
     import java.nio.ByteBuffer;
     import java.nio.ByteOrder;
     import java.text.ParseException;

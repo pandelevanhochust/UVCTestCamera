@@ -1,4 +1,4 @@
-package com.example.uvctestcamera;
+package com.example.uvctestcamera.container.facedetection;
 
 import android.graphics.*;
 import android.media.Image;

@@ -1,9 +1,8 @@
-package com.example.uvctestcamera.UIComponents;
+package com.example.uvctestcamera.components;
 
 import android.content.res.AssetFileDescriptor;
 import android.graphics.*;
 import android.hardware.usb.UsbDevice;
-import android.media.Image;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -11,17 +10,14 @@ import android.util.Log;
 import android.util.Pair;
 
 import android.view.*;
-import android.widget.Button;
 
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import com.example.uvctestcamera.FaceProcessor;
-import com.example.uvctestcamera.Faces;
-import com.example.uvctestcamera.R;
-import com.example.uvctestcamera.backend.Database;
-import com.example.uvctestcamera.backend.MQTT;
+import com.example.uvctestcamera.container.facedetection.FaceProcessor;
+import com.example.uvctestcamera.container.facedetection.Faces;
+import com.example.uvctestcamera.container.mqtt.MQTT;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
 
@@ -32,10 +28,8 @@ import com.serenegiant.usb.USBMonitor;
 import com.serenegiant.usb.IFrameCallback;
 import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
-import com.serenegiant.usb.UVCCamera;
 import com.serenegiant.opencv.ImageProcessor;
 
-import org.json.JSONArray;
 import org.tensorflow.lite.Interpreter;
 
 import java.io.FileInputStream;

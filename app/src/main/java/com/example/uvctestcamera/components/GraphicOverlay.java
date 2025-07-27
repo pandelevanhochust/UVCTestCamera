@@ -1,10 +1,9 @@
 
-package com.example.uvctestcamera.UIComponents;
+package com.example.uvctestcamera.components;
 
 import android.content.Context;
 import android.graphics.*;
 import android.view.View;
-import androidx.annotation.Nullable;
 import android.util.AttributeSet;
 
 

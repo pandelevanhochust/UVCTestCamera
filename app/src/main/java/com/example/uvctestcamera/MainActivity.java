@@ -1,35 +1,17 @@
 package com.example.uvctestcamera;
 
-import android.graphics.SurfaceTexture;
-import android.hardware.usb.UsbDevice;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.Surface;
-import android.view.View;
-import android.widget.Button;
 import android.widget.ImageButton;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
-import com.example.uvctestcamera.UIComponents.CameraPreview;
-import com.example.uvctestcamera.backend.Database;
-import com.example.uvctestcamera.backend.MQTT;
-import com.serenegiant.usb.USBMonitor;
-import com.serenegiant.usb.USBMonitor.UsbControlBlock;
-import com.serenegiant.usbcameracommon.UVCCameraHandler;
-import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
-import com.serenegiant.widget.UVCCameraTextureView;
+import com.example.uvctestcamera.components.CameraPreview;
+import com.example.uvctestcamera.container.database.Database;
+import com.example.uvctestcamera.container.mqtt.MQTT;
 import org.json.JSONException;
-
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-import static android.content.ContentValues.TAG;
-import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -57,7 +39,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Use dropUserScheduleTable and loadFacesfromSQL for debugging database
-//        MQTT.db_handler.dropUserScheduleTable();
+        MQTT.db_handler.dropUserScheduleTable();
 //          MQTT.db_handler.loadFacesfromSQL();
         MQTT.start();
 
