@@ -26,6 +26,7 @@ public class FaceProcessor {
     USB Camera Frame (NV21)
     → convert to Bitmap
     → wrap in InputImage*/
+
     public static Bitmap nv21ToBitmap(byte[] nv21, int width, int height) {
         YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, width, height, null);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
