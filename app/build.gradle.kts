@@ -71,5 +71,8 @@ plugins {
         implementation(libs.jackson.databind)
         implementation(libs.jackson.core)
         implementation(libs.jackson.annotations)
+
+        implementation (libs.onnxruntime.android)
+
     }
 

@@ -45,7 +45,7 @@ import java.util.Objects;
 import com.example.uvctestcamera.databinding.CameraPreviewLayoutBinding;
 import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
 
-public class CameraPreview extends Fragment implements  IFrameCallback {
+public class CameraPreview extends Fragment implements IFrameCallback {
 
     private UVCCameraTextureView cameraView;
     private USBMonitor usbMonitor;

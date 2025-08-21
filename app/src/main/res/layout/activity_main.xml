@@ -24,7 +24,7 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/btn_add"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"/>
 
         <ImageButton
                 android:id="@+id/btn_add"
@@ -38,8 +38,8 @@
                 android:contentDescription="Add Person"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintStart_toEndOf= "@+id/btn_id_card"
-                app:layout_constraintEnd_toStartOf= "@+id/btn_camera"
+                app:layout_constraintStart_toEndOf="@+id/btn_id_card"
+                app:layout_constraintEnd_toStartOf="@+id/btn_camera"
         />
 
         <ImageButton
@@ -52,7 +52,7 @@
                 android:tint="#000000"
                 android:contentDescription="Camera"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf= "@+id/btn_add"
+                app:layout_constraintStart_toEndOf="@+id/btn_add"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintTop_toTopOf="parent"/>
 

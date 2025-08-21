@@ -18,6 +18,8 @@ jackson = "2.15.1"
 protoliteWellKnownTypes = "18.0.1"
 annotationJvm = "1.9.1"
 
+onnx = "1.22.0"
+
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -42,6 +44,8 @@ jackson-core = { group = "com.fasterxml.jackson.core", name = "jackson-core", ve
 jackson-annotations = { group = "com.fasterxml.jackson.core", name = "jackson-annotations", version.ref = "jackson" }
 protolite-well-known-types = { group = "com.google.firebase", name = "protolite-well-known-types", version.ref = "protoliteWellKnownTypes" }
 annotation-jvm = { group = "androidx.annotation", name = "annotation-jvm", version.ref = "annotationJvm" }
+
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnx" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
