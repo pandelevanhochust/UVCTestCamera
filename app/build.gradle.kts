@@ -62,6 +62,7 @@ plugins {
         implementation(libs.paho.mqtt)
         implementation(libs.paho.android)
         implementation(libs.protolite.well.known.types)
+        implementation(libs.annotation.jvm)
 
         testImplementation(libs.junit)
         androidTestImplementation(libs.ext.junit)

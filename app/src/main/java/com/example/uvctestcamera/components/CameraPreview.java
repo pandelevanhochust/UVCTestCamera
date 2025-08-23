@@ -128,6 +128,7 @@ public class CameraPreview extends Fragment implements IFrameCallback {
         @Override
         public void onAttach(UsbDevice device) {
             Toast.makeText(getContext(), "USB Device Attached", Toast.LENGTH_SHORT).show();
+            //Băt được kết nối USB và xin quyền cho app được truy cập Camera
             usbMonitor.requestPermission(device);
         }
 
@@ -185,12 +186,9 @@ public class CameraPreview extends Fragment implements IFrameCallback {
         CameraViewBinding = null;
     }
 
-    @Override
-    public void onFrame(ByteBuffer frame) {
-        Bitmap bitmap = FaceProcessor.ByteBufferToBitmap(frame);
-        detectFace(bitmap);
-    }
+
     // ==== Face Detection  ====
+
     private void detectFace(Bitmap bitmap) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
         faceDetector.process(image)
