@@ -204,7 +204,7 @@
             SQLiteDatabase db = this.getReadableDatabase();
             JSONObject result = null;
 
-            Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME + " WHERE user_id = ?", new String[]{userId});
+            Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME + " WHERE user_id = ? ORDER BY start_time DESC LIMIT 1", new String[]{userId});
 
             if (cursor != null) {
                 if (cursor.moveToFirst()) {

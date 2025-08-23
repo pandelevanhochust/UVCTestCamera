@@ -32,7 +32,7 @@ import java.nio.channels.FileChannel;
 import java.util.*;
 
 
-public class CameraPreview extends Fragment {
+public class CameraPreview extends Fragment  {
 
     private static final String TAG = "AndroidUSBCamera";
 
@@ -186,45 +186,38 @@ public class CameraPreview extends Fragment {
         CameraViewBinding = null;
     }
 
-
     // ==== Face Detection  ====
 
     private void detectFace(Bitmap bitmap) {
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        final Bitmap safeFrame = ensureSoftwareBitmap(bitmap);
+        InputImage image = InputImage.fromBitmap(safeFrame, 0);
         faceDetector.process(image)
-                .addOnSuccessListener(faces -> onFacesDetected(faces, image))
+                .addOnSuccessListener(faces -> onFacesDetected(faces,safeFrame, image))
                 .addOnFailureListener(e -> Log.e(TAG, "Face detection failed", e));
     }
 
-    private void onFacesDetected(List<Face> faces, InputImage inputImage) {
-        String detectedName = "Unknown";
-        Faces.Recognition detectedFace = null;
+    private void onFacesDetected(List<Face> faces, Bitmap frameBitmap, InputImage inputImage) {
         overlayView.clear();
-        if (!faces.isEmpty()) {
-            Face face = faces.get(0);
-            Rect boundingBox = face.getBoundingBox();
-            Pair<String, Faces.Recognition> result = recognize(inputImage.getBitmapInternal(), boundingBox);
-            overlayView.draw(boundingBox, overlayView.getWidth() / (float) inputImage.getWidth(), overlayView.getHeight() / (float) inputImage.getHeight(), result.first);
+        if (faces.isEmpty()) return;
 
-            Log.d(TAG, "Bounding box" + boundingBox);
+        Face face = faces.get(0);
+        Rect box = clampRect(face.getBoundingBox(), frameBitmap.getWidth(), frameBitmap.getHeight());
+        if (box == null) return;
 
-            float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
-            float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
+        float scaleX = overlayView.getWidth()  / (float) inputImage.getWidth();
+        float scaleY = overlayView.getHeight() / (float) inputImage.getHeight();
 
-            Pair<String, Faces.Recognition> output = recognize(inputImage.getBitmapInternal(), boundingBox);
-            detectedName = output.first;
-            detectedFace = output.second;
+        // Single recognition path (remove the duplicate call)
+        Pair<String, Faces.Recognition> result = recognize(frameBitmap, box);
+        String detectedName = result.first;
+        Faces.Recognition detectedFace = result.second;
 
-            overlayView.draw(boundingBox, scaleX, scaleY, detectedName);
-            String timestamp = MQTT.getFormattedTimestamp();
+        overlayView.draw(box, scaleX, scaleY, detectedName);
 
-            if (!Objects.equals(detectedName, "Unknown")) {
-                MQTT.sendFaceMatch(detectedFace, timestamp);
-                Toast.makeText(getContext(), "Name: " + detectedName, Toast.LENGTH_SHORT).show();
-                if (!result.first.equals("Unknown")) {
-                    MQTT.sendFaceMatch(result.second, MQTT.getFormattedTimestamp());
-                }
-            }
+        if (!"Unknown".equals(detectedName)) {
+            String ts = MQTT.getFormattedTimestamp();
+            MQTT.sendFaceMatch(detectedFace, ts);
+            Toast.makeText(getContext(), "Name: " + detectedName, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -277,11 +270,10 @@ public class CameraPreview extends Fragment {
         private final int width, height;
         private Bitmap mFrame;
 
-        FrameProcessorCallback(int width, int height) {
+        protected FrameProcessorCallback(int width, int height) {
             this.width = width;
             this.height = height;
         }
-
         @Override
         public void onFrame(ByteBuffer frame) {
             long currentTime = System.currentTimeMillis();
@@ -324,4 +316,27 @@ public class CameraPreview extends Fragment {
         }
 
     }
+
+    private static @Nullable Bitmap ensureSoftwareBitmap(@Nullable Bitmap src) {
+        if (src == null) return null;
+        if (src.isRecycled()) return null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (src.getConfig() == Bitmap.Config.HARDWARE) {
+                // Convert to a software-backed bitmap before any Canvas operations
+                return src.copy(Bitmap.Config.ARGB_8888, false);
+            }
+        }
+        return src;
+    }
+
+    private static @Nullable Rect clampRect(@NonNull Rect r, int w, int h) {
+        int left = Math.max(0, r.left);
+        int top = Math.max(0, r.top);
+        int right = Math.min(w, r.right);
+        int bottom = Math.min(h, r.bottom);
+        if (right <= left || bottom <= top) return null;  // fully out-of-bounds
+        return new Rect(left, top, right, bottom);
+    }
+
+
 }
