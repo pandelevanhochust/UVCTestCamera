@@ -31,7 +31,7 @@ public class MQTT {
     private static boolean provisioned = false;
     private static String host;
     private static String port;
-    private static String device_name = "42:A1:F6:6C:45:C7";
+    private static String device_name = "43:A1:F6:6C:45:C7";
 
     public static Database db_handler;
 
@@ -72,7 +72,7 @@ public class MQTT {
             e.printStackTrace();
         }
     }
-
+// note lại task
     public static void start() {
         Log.d(TAG,"Reach start");
         try {
