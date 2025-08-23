@@ -39,7 +39,7 @@
         private static final int PREVIEW_WIDTH = 640;
         private static final int PREVIEW_HEIGHT = 480;
 
-        private static final String DEVICE_ID = "fb4ed650-5583-11f0-96c6-855152e3efab";
+        private static final String DEVICE_ID = "1c7c9da0-7c42-11f0-8715-c7d1f7b78287";
 
         public Database(Context context) {
             super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -227,6 +227,9 @@
             SQLiteDatabase db = this.getReadableDatabase();
             String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
 
+            Log.d(TAG, "Querying with now=" + now + ", device_id=" + DEVICE_ID);
+
+
             String sql = "SELECT user_id, username, face_image, face_embedding " +
                     "FROM " + TABLE_NAME + " " +
                     "WHERE start_time <= ? AND end_time >= ? AND device_id = ?";
@@ -256,6 +259,7 @@
 
                     CameraPreview.savedFaces.put(username, face);
                 }
+                Log.d(TAG, "Cursor count: " + cursor.getCount());
                 cursor.close();
             }
         }
