@@ -30,6 +30,11 @@ import java.io.*;
 import java.nio.*;
 import java.nio.channels.FileChannel;
 import java.util.*;
+import ai.onnxruntime.*;
+
+
+//private OrtEnvironment ortEnv;
+//private OrtSession ortSession;
 
 
 public class CameraPreview extends Fragment  {
@@ -98,6 +103,37 @@ public class CameraPreview extends Fragment  {
             Log.e(TAG, "Error loading model", e);
         }
     }
+
+//    private void loadModelOnnx() {
+//        try {
+//            // 1) Read model bytes from assets (Android can't open assets by filesystem path)
+//            AssetFileDescriptor afd = getContext().getAssets().openFd("mobile_face_net.onnx");
+//            FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
+//            FileChannel channel = fis.getChannel();
+//            long start = afd.getStartOffset();
+//            long length = afd.getDeclaredLength();
+//            ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
+//            channel.position(start);
+//            channel.read(bb);
+//            bb.flip();
+//            byte[] modelBytes = new byte[bb.remaining()];
+//            bb.get(modelBytes);
+//
+//            // 2) Create ORT environment and session options
+//            ortEnv = OrtEnvironment.getEnvironment();
+//            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
+//
+//            // Optional: enable Android NNAPI EP (for supported ops / devices)
+//            opts.addNnapi();
+//
+//            // 3) Create the session from in-memory bytes
+//            ortSession = ortEnv.createSession(modelBytes, opts);
+//
+//            Log.d(TAG, "Deployed ONNX model successfully");
+//        } catch (Exception e) {
+//            Log.e(TAG, "Error loading ONNX model", e);
+//        }
+//    }
 
     private void setupFaceDetector() {
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
@@ -249,6 +285,7 @@ public class CameraPreview extends Fragment  {
         if (bestFace != null) bestFace.setDistance(minDistance);
         return new Pair<>(bestMatch, bestFace);
     }
+
     // ==== Frame Processing ====
     protected void startImageProcessor(int width, int height) {
         mIsRunning = true;

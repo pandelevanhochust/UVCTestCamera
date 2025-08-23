@@ -103,12 +103,22 @@ public class MQTT {
                 provisionClient.connect(options);
 
                 MqttClient finalProvisionClient = provisionClient;
-                provisionClient.setCallback(new MqttCallback() {
-                    @Override
-                    public void connectionLost(Throwable cause) {
-                        Log.e(TAG, "[Provision] Connection lost: " + cause.getMessage());
-                    }
 
+                provisionClient.subscribe(provision_response_topic, subQos);
+
+                JSONObject provisionRequest = new JSONObject();
+                provisionRequest.put("provisionDeviceKey", provision_device_key);
+                provisionRequest.put("provisionDeviceSecret", provision_device_secret);
+                //Select devices here
+                provisionRequest.put("deviceName", device_name);
+
+                MqttMessage provisionMessage = new MqttMessage(provisionRequest.toString().getBytes());
+                provisionMessage.setQos(pubQos);
+                provisionClient.publish(provision_request_topic, provisionMessage);
+
+                Log.d(TAG, "[Provision] Sent provision request: " + provisionRequest.toString());
+
+                provisionClient.setCallback(new MqttCallback() {
                     @Override
                     public void messageArrived(String topic, MqttMessage message) throws Exception {
                         String payload = new String(message.getPayload());
@@ -156,24 +166,15 @@ public class MQTT {
                     }
 
                     @Override
+                    public void connectionLost(Throwable cause) {
+                        Log.e(TAG, "[Provision] Connection lost: " + cause.getMessage());
+                    }
+
+                    @Override
                     public void deliveryComplete(IMqttDeliveryToken token) {
                         Log.d(TAG, "[Provision] Delivery complete.");
                     }
                 });
-
-                provisionClient.subscribe(provision_response_topic, subQos);
-
-                JSONObject provisionRequest = new JSONObject();
-                provisionRequest.put("provisionDeviceKey", provision_device_key);
-                provisionRequest.put("provisionDeviceSecret", provision_device_secret);
-                //Select devices here
-                provisionRequest.put("deviceName", device_name);
-
-                MqttMessage provisionMessage = new MqttMessage(provisionRequest.toString().getBytes());
-                provisionMessage.setQos(pubQos);
-                provisionClient.publish(provision_request_topic, provisionMessage);
-
-                Log.d(TAG, "[Provision] Sent provision request: " + provisionRequest.toString());
 
             } catch (Exception e) {
                 Log.e(TAG, "[Provision] Exception: " + e.getMessage());
