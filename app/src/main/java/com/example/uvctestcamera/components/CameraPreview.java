@@ -204,8 +204,23 @@ public class CameraPreview extends Fragment implements IFrameCallback {
             Pair<String, Faces.Recognition> result = recognize(inputImage.getBitmapInternal(), boundingBox);
             overlayView.draw(boundingBox, overlayView.getWidth() / (float) inputImage.getWidth(), overlayView.getHeight() / (float) inputImage.getHeight(), result.first);
 
+            Log.d(TAG,"Bounding box" + boundingBox);
+
+            float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
+            float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
+
+            Pair<String, Faces.Recognition> output = recognize(inputImage.getBitmapInternal(), boundingBox);
+            detectedName = output.first;
+            detectedFace = output.second;
+
+            overlayView.draw(boundingBox,scaleX,scaleY,detectedName);
+            String timestamp = MQTT.getFormattedTimestamp();
+
+            if(!Objects.equals(detectedName, "Unknown")){
+                MQTT.sendFaceMatch(detectedFace,timestamp);
+                Toast.makeText(getContext(), "Name: " + detectedName, Toast.LENGTH_SHORT).show();
             if (!result.first.equals("Unknown")) {
-                MQTT.sendFaceMatch(result.second, MQTT.getFormattedTimestamp());
+                MQTT.sendFaceMatch(result.second, MQTT.getFormattedTimestamp())
             }
         }
     }
