@@ -19,12 +19,12 @@ import com.example.uvctestcamera.container.mqtt.MQTT;
 import com.example.uvctestcamera.databinding.CameraPreviewLayoutBinding;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.*;
-import com.serenegiant.opencv.ImageProcessor;
 import com.serenegiant.usb.*;
 import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
-
+import com.serenegiant.opencv.ImageProcessor;
 import org.tensorflow.lite.Interpreter;
+import com.serenegiant.usb.IFrameCallback;
 
 import java.io.*;
 import java.nio.*;
@@ -32,7 +32,7 @@ import java.nio.channels.FileChannel;
 import java.util.*;
 
 
-public class CameraPreview extends Fragment implements IFrameCallback {
+public class CameraPreview extends Fragment {
 
     private static final String TAG = "AndroidUSBCamera";
 
@@ -197,6 +197,8 @@ public class CameraPreview extends Fragment implements IFrameCallback {
     }
 
     private void onFacesDetected(List<Face> faces, InputImage inputImage) {
+        String detectedName = "Unknown";
+        Faces.Recognition detectedFace = null;
         overlayView.clear();
         if (!faces.isEmpty()) {
             Face face = faces.get(0);
@@ -204,7 +206,7 @@ public class CameraPreview extends Fragment implements IFrameCallback {
             Pair<String, Faces.Recognition> result = recognize(inputImage.getBitmapInternal(), boundingBox);
             overlayView.draw(boundingBox, overlayView.getWidth() / (float) inputImage.getWidth(), overlayView.getHeight() / (float) inputImage.getHeight(), result.first);
 
-            Log.d(TAG,"Bounding box" + boundingBox);
+            Log.d(TAG, "Bounding box" + boundingBox);
 
             float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
             float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
@@ -213,14 +215,15 @@ public class CameraPreview extends Fragment implements IFrameCallback {
             detectedName = output.first;
             detectedFace = output.second;
 
-            overlayView.draw(boundingBox,scaleX,scaleY,detectedName);
+            overlayView.draw(boundingBox, scaleX, scaleY, detectedName);
             String timestamp = MQTT.getFormattedTimestamp();
 
-            if(!Objects.equals(detectedName, "Unknown")){
-                MQTT.sendFaceMatch(detectedFace,timestamp);
+            if (!Objects.equals(detectedName, "Unknown")) {
+                MQTT.sendFaceMatch(detectedFace, timestamp);
                 Toast.makeText(getContext(), "Name: " + detectedName, Toast.LENGTH_SHORT).show();
-            if (!result.first.equals("Unknown")) {
-                MQTT.sendFaceMatch(result.second, MQTT.getFormattedTimestamp())
+                if (!result.first.equals("Unknown")) {
+                    MQTT.sendFaceMatch(result.second, MQTT.getFormattedTimestamp());
+                }
             }
         }
     }

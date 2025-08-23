@@ -41,7 +41,7 @@ jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-datab
 jackson-core = { group = "com.fasterxml.jackson.core", name = "jackson-core", version.ref = "jackson" }
 jackson-annotations = { group = "com.fasterxml.jackson.core", name = "jackson-annotations", version.ref = "jackson" }
 protolite-well-known-types = { group = "com.google.firebase", name = "protolite-well-known-types", version.ref = "protoliteWellKnownTypes" }
-annotation-jvm = { group = "androidx.annotation", name = "annotation-jvm", version.ref = "annotationJvm" }
+annotation-jvm = { module = "androidx.annotation:annotation", version.ref = "annotationJvm" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
