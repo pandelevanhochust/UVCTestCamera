@@ -3,357 +3,97 @@ package com.example.uvctestcamera.components;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.*;
 import android.hardware.usb.UsbDevice;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.util.Log;
+import android.os.*;
+import android.util.*;
 import android.util.Pair;
-
 import android.view.*;
-
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+
 import com.example.uvctestcamera.container.facedetection.FaceProcessor;
 import com.example.uvctestcamera.container.facedetection.Faces;
 import com.example.uvctestcamera.container.mqtt.MQTT;
+import com.example.uvctestcamera.databinding.CameraPreviewLayoutBinding;
 import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.face.Face;
-
-import com.google.mlkit.vision.face.FaceDetection;
-import com.google.mlkit.vision.face.FaceDetector;
-import com.google.mlkit.vision.face.FaceDetectorOptions;
-import com.serenegiant.usb.USBMonitor;
-import com.serenegiant.usb.IFrameCallback;
+import com.google.mlkit.vision.face.*;
+import com.serenegiant.opencv.ImageProcessor;
+import com.serenegiant.usb.*;
 import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
-import com.serenegiant.opencv.ImageProcessor;
 
 import org.tensorflow.lite.Interpreter;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
+import java.io.*;
+import java.nio.*;
 import java.nio.channels.FileChannel;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
-import com.example.uvctestcamera.databinding.CameraPreviewLayoutBinding;
-import static com.serenegiant.uvccamera.BuildConfig.DEBUG;
 
-public class CameraPreview extends Fragment implements  IFrameCallback {
-
-    private UVCCameraTextureView cameraView;
-    private USBMonitor usbMonitor;
-    private UVCCameraHandlerMultiSurface cameraHandler;
-    private int surfaceId = 1;
-
-    //  NAVIS Screen size
-    private static final int PREVIEW_WIDTH = 640;
-    private static final int PREVIEW_HEIGHT = 480;
-    private static final boolean USE_SURFACE_ENCODER = false;
-    private static final int PREVIEW_MODE = 1;
+public class CameraPreview extends Fragment implements IFrameCallback {
 
     private static final String TAG = "AndroidUSBCamera";
-    private CameraPreviewLayoutBinding CameraViewBinding;
 
-    GraphicOverlay overlayView;
-    public static Interpreter tfLite;
-    private float[][] embeddings;
-    public static HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
-    private FaceDetector faceDetector;
-
-    private static final int INPUT_SIZE = 112;
+    private static final int PREVIEW_WIDTH = 640;
+    private static final int PREVIEW_HEIGHT = 480;
     private static final int OUTPUT_SIZE = 192;
-
-    private volatile boolean mIsRunning;
-    private int mImageProcessorSurfaceId;
-    protected ImageProcessor mImageProcessor;
-    protected SurfaceView mResultView;
-
-    private long lastAnalyzedTime = 0;
     private static final long ANALYZE_INTERVAL_MS = 500;
-
     private static final float MATCH_THRESHOLD = 1.0f;
     private static final String DEVICE_ID = "fb4ed650-5583-11f0-96c6-855152e3efab";
 
+    private UVCCameraTextureView cameraView;
+    private GraphicOverlay overlayView;
+    private USBMonitor usbMonitor;
+    private UVCCameraHandlerMultiSurface cameraHandler;
+    private ImageProcessor mImageProcessor;
+    public static Interpreter tfLite;
+    private FaceDetector faceDetector;
+    private float[][] embeddings;
+    private int surfaceId = 1;
+    private int mImageProcessorSurfaceId;
+    private boolean mIsRunning;
+    private long lastAnalyzedTime = 0;
+    private CameraPreviewLayoutBinding CameraViewBinding;
+    private SessionMonitor sessionMonitor;
+
+    public static final HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
+
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,@Nullable Bundle savedInstanceState) {
-        CameraViewBinding = CameraPreviewLayoutBinding.inflate(inflater,container,false);
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        CameraViewBinding = CameraPreviewLayoutBinding.inflate(inflater, container, false);
         return CameraViewBinding.getRoot();
     }
 
+    @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
         cameraView = CameraViewBinding.cameraView;
         overlayView = CameraViewBinding.graphicOverlay;
+        usbMonitor = new USBMonitor(requireContext(), deviceConnectListener);
 
-        cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(),
-                cameraView,
-                0,
-                PREVIEW_WIDTH,
-                PREVIEW_HEIGHT,
-                1,
-                1.0f);
+        cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
-        usbMonitor = new USBMonitor(requireContext(),deviceConnectListener);
         loadModel();
         setupFaceDetector();
         usbMonitor.register();
         MQTT.db_handler.loadFacesfromSQL();
 
-        // Setup session monitor
-        Handler sessionMonitorHandler = new Handler(Looper.getMainLooper());
-        Runnable[] sessionMonitorRunnable = new Runnable[1];
-
-        sessionMonitorRunnable[0] = () -> {
-            long now = System.currentTimeMillis();
-            long nextEndMillis = MQTT.db_handler.getNextSessionEndTimeMillis(DEVICE_ID);
-
-            if (nextEndMillis > now) {
-                long delay = nextEndMillis - now;
-
-                if (delay <= 0 || delay > 24 * 60 * 60 * 1000) {
-                    Log.w(TAG, "⚠️ Delay abnormal, fallback to 5 min");
-                    delay = 5 * 60 * 1000;
-                }
-
-                Log.d(TAG, "⏰ Scheduling next face reload after session ends in " + delay / 1000 + "s");
-
-                sessionMonitorHandler.postDelayed(() -> {
-                    Log.d(TAG, "🔄 Reloading faces after session ended");
-                    MQTT.db_handler.loadFacesfromSQL();
-                    sessionMonitorHandler.post(sessionMonitorRunnable[0]);
-                }, delay);
-            } else {
-                Log.d(TAG, "🕒 No session found. Forcing reload and checking again in 5 minutes.");
-                MQTT.db_handler.loadFacesfromSQL();
-                sessionMonitorHandler.postDelayed(sessionMonitorRunnable[0], 5 * 60 * 1000);
-            }
-            Log.d(TAG,savedFaces.toString());
-            Log.d(TAG,"Here the savedFaces" + savedFaces);
-        };
-
-        sessionMonitorHandler.post(sessionMonitorRunnable[0]);
-
-        Log.d(TAG,"Here the savedFaces" + savedFaces);
-        Log.d(TAG,"Reach onViewCreated");
+        sessionMonitor = new SessionMonitor();
+        sessionMonitor.start();
+        Log.d(CameraPreview.TAG, "Here the savedFaces" + CameraPreview.savedFaces);
     }
 
-    private void startPreview() {
-        if (DEBUG) Log.v(TAG, "startPreview:");
-
-        cameraView.resetFps();
-        cameraHandler.startPreview();
-
-        requireActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    final SurfaceTexture st = cameraView.getSurfaceTexture();
-                    if (st != null) {
-                        final Surface surface = new Surface(st);
-                        surfaceId = surface.hashCode();
-                        cameraHandler.addSurface(surfaceId, surface, false);
-                    }
-                    Log.e(TAG, "Reach Start Preview");
-                    startImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT);
-                } catch (final Exception e) {
-                    Log.w(TAG, e);
-                }
-            }
-        });
-    }
-
-    //Connect device with UVC Camera
-    private final USBMonitor.OnDeviceConnectListener deviceConnectListener
-            = new USBMonitor.OnDeviceConnectListener() {
-
-        @Override
-        public void onAttach(final UsbDevice device) {
-            Toast.makeText(getContext(), "USB Device Attached", Toast.LENGTH_SHORT).show();
-            usbMonitor.requestPermission(device);
-            Log.d("USB", "onAttach: " + device.getVendorId() + ":" + device.getProductId());
-        }
-
-        @Override
-        public void onConnect(final UsbDevice device, final USBMonitor.UsbControlBlock ctrlBlock, final boolean createNew) {
-            if (!usbMonitor.hasPermission(device)) {
-                Toast.makeText(getContext(), "USB permission not granted", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (DEBUG) Log.v(TAG, "onConnect:");
-            try {
-                cameraHandler.open(ctrlBlock);
-                startPreview();
-
-            } catch (SecurityException e) {
-                Log.e(TAG, "SecurityException: no permission to access USB", e);
-            } catch (Exception e) {
-                Log.e(TAG, "Error opening camera", e);
-            }
-        }
-
-        @Override
-        public void onDisconnect(final UsbDevice device, final USBMonitor.UsbControlBlock ctrlBlock) {
-            if(surfaceId != 0){
-                cameraHandler.removeSurface(surfaceId);
-                surfaceId = 0;
-            }
-            cameraHandler.close();
-        }
-
-        @Override
-        public void onDettach(final UsbDevice device) {
-            Toast.makeText(getContext(), "USB Device Detached", Toast.LENGTH_SHORT).show();
-        }
-
-        @Override
-        public void onCancel(final UsbDevice device) {
-            Toast.makeText(getContext(), "USB Permission Cancelled", Toast.LENGTH_SHORT).show();
-        }
-    };
-
-    @Override
-    public void onStart() {
-        super.onStart();
-        usbMonitor.register();
-        for (UsbDevice device : usbMonitor.getDeviceList()) {
-            Log.d("USB", "Device: " + device.getVendorId() + ":" + device.getProductId());
-        }
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-        stopImageProcessor();
-        cameraHandler.close();
-    }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        cameraHandler.release();
-        usbMonitor.unregister();
-        usbMonitor.destroy();
-        CameraViewBinding = null;
-//        if (sessionMonitorHandler != null) {
-//            sessionMonitorHandler.removeCallbacksAndMessages(null);
-//        }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-    }
-
-    @Override
-    public void onFrame(ByteBuffer frame){
-        Bitmap bitmap = FaceProcessor.ByteBufferToBitmap(frame);
-        detectFace(bitmap);
-    }
-
-    private void detectFace(Bitmap bitmap) {
-//        Log.d(TAG,"Reach detect face ");
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
-        faceDetector.process(image) //Bitmap Image
-                .addOnSuccessListener(faces -> {Log.d(TAG, "Face detected");onFacesDetected(faces, image); })
-                .addOnFailureListener(e -> Log.e(TAG, "Face detection failed", e));
-    }
-
-    private void onFacesDetected(List<Face> faces, InputImage inputImage){
-        overlayView.clear();
-        if (!faces.isEmpty()) {
-            String detectedName = "Unknown";
-            Face face = faces.get(0);
-            Rect boundingBox = face.getBoundingBox();
-            Faces.Recognition detectedFace = null;
-
-            Log.d(TAG,"Bounding box" + boundingBox);
-
-            float scaleX = overlayView.getWidth() * 1.0f / inputImage.getWidth();
-            float scaleY = overlayView.getHeight() * 1.0f / inputImage.getHeight();
-
-            Pair<String, Faces.Recognition> output = recognize(inputImage.getBitmapInternal(), boundingBox);
-            detectedName = output.first;
-            detectedFace = output.second;
-
-            overlayView.draw(boundingBox,scaleX,scaleY,detectedName);
-            String timestamp = MQTT.getFormattedTimestamp();
-
-            if(!Objects.equals(detectedName, "Unknown")){
-                MQTT.sendFaceMatch(detectedFace,timestamp);
-            }
-            Log.d(TAG, "Face recognized: " +  detectedName + ", timestamp: " + timestamp);
-        }
-    }
-
-    // Using TFLite to recognize
-    private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
-        float minDistance = Float.MAX_VALUE;
-        String bestMatch = "Unknown";
-        Faces.Recognition bestFace = null;
-
-        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
-        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
-
-        Object[] inputArray = {input};
-        Map<Integer, Object> outputMap = new HashMap<>();
-        embeddings = new float[1][OUTPUT_SIZE];
-        outputMap.put(0, embeddings);
-
-        tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
-
-        if (CameraPreview.savedFaces == null || CameraPreview.savedFaces.isEmpty()) {
-            Log.w("Recognition", "No faces saved in memory");
-            return new Pair<>("Unknown", null);
-        }
-
-        for (Map.Entry<String, Faces.Recognition> entry : CameraPreview.savedFaces.entrySet()) {
-            float[] known = ((float[][]) entry.getValue().getExtra())[0];
-            float dist = 0f;
-
-            for (int i = 0; i < OUTPUT_SIZE; i++) {
-                float diff = embeddings[0][i] - known[i];
-                dist += diff * diff;
-            }
-            dist = (float) Math.sqrt(dist);
-
-            Log.d(TAG, "Distance to " + entry.getKey() + ": " + dist);
-
-            if (dist < minDistance) {
-                bestMatch = entry.getKey();
-                minDistance = dist;
-                bestFace = entry.getValue();
-                bestFace.setDistance(dist);
-            }
-
-            bestFace.setDistance(minDistance);
-        }
-
-        if (minDistance > MATCH_THRESHOLD) {
-            bestMatch = "Unknown";
-        }
-        Log.d("Recognition", "Closest match: " + bestMatch + " with distance: " + minDistance);
-        return new Pair<>(bestMatch,bestFace);
-    }
-
-    //Loading model
     private void loadModel() {
         try {
-            AssetFileDescriptor fileDescriptor = getContext().getAssets().openFd("mobile_face_net.tflite");
+            AssetFileDescriptor fileDescriptor = requireContext().getAssets().openFd("mobile_face_net.tflite");
             FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
             FileChannel fileChannel = inputStream.getChannel();
-            long startOffset = fileDescriptor.getStartOffset();
-            long declaredLength = fileDescriptor.getDeclaredLength();
-
-            MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+            MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.getStartOffset(), fileDescriptor.getDeclaredLength());
             tfLite = new Interpreter(model);
-            Log.d(TAG,"Deployed model successfully");
+            Log.d(TAG, "Deployed model successfully");
         } catch (IOException e) {
             Log.e(TAG, "Error loading model", e);
         }
@@ -366,76 +106,206 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
                 .build();
         faceDetector = FaceDetection.getClient(options);
-        Log.d(TAG,"Face detector deployed successfully");
     }
 
-    //Load savedFaces from Backend
-
-    //Analyze frames
-    protected void startImageProcessor(final int processing_width, final int processing_height) {
-        if (DEBUG) Log.v(TAG, "startImageProcessor:");
-        mIsRunning = true;
-        if (mImageProcessor == null) {
-            mImageProcessor = new ImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT, // NAVIS ScreenSize
-                    new MyImageProcessorCallback(processing_width, processing_height));  // callback function
-            mImageProcessor.start(processing_width, processing_height);  // processing frame
-            final Surface surface = mImageProcessor.getSurface();
-            mImageProcessorSurfaceId = surface != null ? surface.hashCode() : 0;
-            if (mImageProcessorSurfaceId != 0) {
-                cameraHandler.addSurface(mImageProcessorSurfaceId, surface, false);
+    // ==== [1] Camera Lifecycle ====
+    private void startPreview() {
+        cameraView.resetFps();
+        cameraHandler.startPreview();
+        requireActivity().runOnUiThread(() -> {
+            try {
+                Surface surface = new Surface(cameraView.getSurfaceTexture());
+                surfaceId = surface.hashCode();
+                cameraHandler.addSurface(surfaceId, surface, false);
+                startImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+            } catch (Exception e) {
+                Log.w(TAG, e);
             }
-        }
+        });
     }
 
-    // Custom Image Processor Callback for processing frames
-    protected class MyImageProcessorCallback implements ImageProcessor.ImageProcessorCallback {
-        private final int width, height;
-        private final Matrix matrix = new Matrix();
-        private Bitmap mFrame;
-
-        protected MyImageProcessorCallback(final int processing_width, final int processing_height) {
-            width = processing_width;
-            height = processing_height;
+    private final USBMonitor.OnDeviceConnectListener deviceConnectListener = new USBMonitor.OnDeviceConnectListener() {
+        @Override
+        public void onAttach(UsbDevice device) {
+            Toast.makeText(getContext(), "USB Device Attached", Toast.LENGTH_SHORT).show();
+            usbMonitor.requestPermission(device);
         }
 
         @Override
-        public void onFrame(final ByteBuffer frame) {
-            //Log when needed
-//            Log.d(TAG,"Reach this Frame");
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - lastAnalyzedTime < ANALYZE_INTERVAL_MS) {
+        public void onConnect(UsbDevice device, USBMonitor.UsbControlBlock ctrlBlock, boolean createNew) {
+            if (!usbMonitor.hasPermission(device)) {
+                Toast.makeText(getContext(), "USB permission not granted", Toast.LENGTH_SHORT).show();
                 return;
             }
-            lastAnalyzedTime = currentTime;
-            if (mFrame == null) {
-                Log.d(TAG,"Null Frame");
-                mFrame = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            try {
+                cameraHandler.open(ctrlBlock);
+                startPreview();
+            } catch (Exception e) {
+                Log.e(TAG, "Error opening camera", e);
             }
+        }
+
+        @Override
+        public void onDisconnect(UsbDevice device, USBMonitor.UsbControlBlock ctrlBlock) {
+            if (surfaceId != 0) cameraHandler.removeSurface(surfaceId);
+            cameraHandler.close();
+        }
+
+        @Override
+        public void onDettach(UsbDevice device) {
+            Toast.makeText(getContext(), "USB Device Detached", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onCancel(UsbDevice device) {
+            Toast.makeText(getContext(), "USB Permission Cancelled", Toast.LENGTH_SHORT).show();
+        }
+    };
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        usbMonitor.register();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        stopImageProcessor();
+        cameraHandler.close();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        sessionMonitor.stop();
+        cameraHandler.release();
+        usbMonitor.unregister();
+        usbMonitor.destroy();
+        CameraViewBinding = null;
+    }
+
+    @Override
+    public void onFrame(ByteBuffer frame) {
+        Bitmap bitmap = FaceProcessor.ByteBufferToBitmap(frame);
+        detectFace(bitmap);
+    }
+    // ==== Face Detection  ====
+    private void detectFace(Bitmap bitmap) {
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        faceDetector.process(image)
+                .addOnSuccessListener(faces -> onFacesDetected(faces, image))
+                .addOnFailureListener(e -> Log.e(TAG, "Face detection failed", e));
+    }
+
+    private void onFacesDetected(List<Face> faces, InputImage inputImage) {
+        overlayView.clear();
+        if (!faces.isEmpty()) {
+            Face face = faces.get(0);
+            Rect boundingBox = face.getBoundingBox();
+            Pair<String, Faces.Recognition> result = recognize(inputImage.getBitmapInternal(), boundingBox);
+            overlayView.draw(boundingBox, overlayView.getWidth() / (float) inputImage.getWidth(), overlayView.getHeight() / (float) inputImage.getHeight(), result.first);
+
+            if (!result.first.equals("Unknown")) {
+                MQTT.sendFaceMatch(result.second, MQTT.getFormattedTimestamp());
+            }
+        }
+    }
+
+    private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
+        float minDistance = Float.MAX_VALUE;
+        String bestMatch = "Unknown";
+        Faces.Recognition bestFace = null;
+
+        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
+        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
+
+        embeddings = new float[1][OUTPUT_SIZE];
+        tfLite.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
+
+        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
+            float[] known = ((float[][]) entry.getValue().getExtra())[0];
+            float dist = 0f;
+            for (int i = 0; i < OUTPUT_SIZE; i++) dist += Math.pow(embeddings[0][i] - known[i], 2);
+            dist = (float) Math.sqrt(dist);
+
+            if (dist < minDistance) {
+                minDistance = dist;
+                bestMatch = entry.getKey();
+                bestFace = entry.getValue();
+            }
+        }
+
+        if (minDistance > MATCH_THRESHOLD) bestMatch = "Unknown";
+        if (bestFace != null) bestFace.setDistance(minDistance);
+        return new Pair<>(bestMatch, bestFace);
+    }
+    // ==== Frame Processing ====
+    protected void startImageProcessor(int width, int height) {
+        mIsRunning = true;
+        if (mImageProcessor == null) {
+            mImageProcessor = new ImageProcessor(PREVIEW_WIDTH, PREVIEW_HEIGHT, new FrameProcessorCallback(width, height));
+            mImageProcessor.start(width, height);
+            Surface surface = mImageProcessor.getSurface();
+            mImageProcessorSurfaceId = surface != null ? surface.hashCode() : 0;
+            if (mImageProcessorSurfaceId != 0) cameraHandler.addSurface(mImageProcessorSurfaceId, surface, false);
+        }
+    }
+
+    protected void stopImageProcessor() {
+        if (mImageProcessorSurfaceId != 0) cameraHandler.removeSurface(mImageProcessorSurfaceId);
+        if (mImageProcessor != null) mImageProcessor.release();
+    }
+
+    protected class FrameProcessorCallback implements ImageProcessor.ImageProcessorCallback {
+        private final int width, height;
+        private Bitmap mFrame;
+
+        FrameProcessorCallback(int width, int height) {
+            this.width = width;
+            this.height = height;
+        }
+
+        @Override
+        public void onFrame(ByteBuffer frame) {
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - lastAnalyzedTime < ANALYZE_INTERVAL_MS) return;
+            lastAnalyzedTime = currentTime;
+
+            if (mFrame == null) mFrame = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
             try {
                 frame.rewind();
                 mFrame.copyPixelsFromBuffer(frame);
-                // Log.d(TAG,"Passed to detection");
-                detectFace(Bitmap.createBitmap(mFrame)); //Bitmap
-            } catch (final Exception e) {
+                detectFace(Bitmap.createBitmap(mFrame));
+            } catch (Exception e) {
                 Log.w(TAG, e);
             }
         }
 
         @Override
-        public void onResult(final int type, final float[] result) {
+        public void onResult(int type, float[] result) {
         }
     }
 
-    protected void stopImageProcessor() {
-        if (DEBUG) Log.v(TAG, "stopImageProcessor:");
-        if (mImageProcessorSurfaceId != 0) {
-            cameraHandler.removeSurface(mImageProcessorSurfaceId);
-            mImageProcessorSurfaceId = 0;
-        }
-        if (mImageProcessor != null) {
-            mImageProcessor.release();
-            mImageProcessor = null;
-        }
-    }
+    private class SessionMonitor {
+        private final Handler handler = new Handler(Looper.getMainLooper());
+        private final Runnable task = this::run;
 
+        void start() {
+            handler.post(task);
+        }
+
+        void stop() {
+            handler.removeCallbacksAndMessages(null);
+        }
+
+        private void run() {
+            long now = System.currentTimeMillis();
+            long nextEndMillis = MQTT.db_handler.getNextSessionEndTimeMillis(DEVICE_ID);
+            long delay = Math.max(0, Math.min(nextEndMillis - now, 24 * 60 * 60 * 1000));
+            MQTT.db_handler.loadFacesfromSQL();
+            handler.postDelayed(task, delay > 0 ? delay : 5 * 60 * 1000);
+        }
+
+    }
 }
