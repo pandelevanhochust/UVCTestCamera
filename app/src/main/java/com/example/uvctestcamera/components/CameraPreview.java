@@ -283,6 +283,7 @@ public class CameraPreview extends Fragment implements  IFrameCallback {
 
             if(!Objects.equals(detectedName, "Unknown")){
                 MQTT.sendFaceMatch(detectedFace,timestamp);
+                Toast.makeText(getContext(), "Name: " + detectedName, Toast.LENGTH_SHORT).show();
             }
             Log.d(TAG, "Face recognized: " +  detectedName + ", timestamp: " + timestamp);
         }
