@@ -38,6 +38,7 @@ plugins {
 
         buildFeatures {
             viewBinding = true
+            dataBinding = true
         }
 
     }

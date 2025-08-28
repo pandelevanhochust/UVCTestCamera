@@ -33,10 +33,6 @@ import java.util.*;
 import ai.onnxruntime.*;
 
 
-//private OrtEnvironment ortEnv;
-//private OrtSession ortSession;
-
-
 public class CameraPreview extends Fragment  {
 
     private static final String TAG = "AndroidUSBCamera";
@@ -63,6 +59,9 @@ public class CameraPreview extends Fragment  {
     private CameraPreviewLayoutBinding CameraViewBinding;
     private SessionMonitor sessionMonitor;
 
+    private OrtEnvironment ortEnv;
+    private OrtSession ortSession;
+
     public static final HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
 
     @Override
@@ -82,6 +81,7 @@ public class CameraPreview extends Fragment  {
         cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
         loadModel();
+        loadModelOnnx("FaceRecognition.onnx");
         setupFaceDetector();
         usbMonitor.register();
         MQTT.db_handler.loadFacesfromSQL();
@@ -104,36 +104,38 @@ public class CameraPreview extends Fragment  {
         }
     }
 
-//    private void loadModelOnnx() {
-//        try {
-//            // 1) Read model bytes from assets (Android can't open assets by filesystem path)
-//            AssetFileDescriptor afd = getContext().getAssets().openFd("mobile_face_net.onnx");
-//            FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
-//            FileChannel channel = fis.getChannel();
-//            long start = afd.getStartOffset();
-//            long length = afd.getDeclaredLength();
-//            ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
-//            channel.position(start);
-//            channel.read(bb);
-//            bb.flip();
-//            byte[] modelBytes = new byte[bb.remaining()];
-//            bb.get(modelBytes);
-//
-//            // 2) Create ORT environment and session options
-//            ortEnv = OrtEnvironment.getEnvironment();
-//            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-//
-//            // Optional: enable Android NNAPI EP (for supported ops / devices)
-//            opts.addNnapi();
-//
-//            // 3) Create the session from in-memory bytes
-//            ortSession = ortEnv.createSession(modelBytes, opts);
-//
-//            Log.d(TAG, "Deployed ONNX model successfully");
-//        } catch (Exception e) {
-//            Log.e(TAG, "Error loading ONNX model", e);
-//        }
-//    }
+    // Ham load model moi
+    private OrtSession loadModelOnnx(String assetFileName) {
+        OrtSession session = null;
+        try {
+            AssetFileDescriptor afd = getContext().getAssets().openFd(assetFileName);
+            FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
+            FileChannel channel = fis.getChannel();
+            long start = afd.getStartOffset();
+            long length = afd.getDeclaredLength();
+
+            ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
+            channel.position(start);
+            channel.read(bb);
+            bb.flip();
+
+            byte[] modelBytes = new byte[bb.remaining()];
+            bb.get(modelBytes);
+
+            ortEnv = OrtEnvironment.getEnvironment();
+            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
+
+            opts.addNnapi();
+
+            session = ortEnv.createSession(modelBytes, opts);
+
+            Log.d(TAG, "Deployed ONNX model successfully: " + assetFileName);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading ONNX model: " + assetFileName, e);
+        }
+        return session;
+    }
 
     private void setupFaceDetector() {
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
