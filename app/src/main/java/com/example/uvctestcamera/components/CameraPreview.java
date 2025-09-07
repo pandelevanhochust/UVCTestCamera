@@ -24,7 +24,7 @@ import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
 import com.serenegiant.opencv.ImageProcessor;
 import org.tensorflow.lite.Interpreter;
-import com.serenegiant.usb.IFrameCallback;
+//import com.serenegiant.usb.IFrameCallback;
 
 import java.io.*;
 import java.nio.*;
@@ -42,7 +42,7 @@ public class CameraPreview extends Fragment  {
     private static final int OUTPUT_SIZE = 192;
     private static final long ANALYZE_INTERVAL_MS = 500;
     private static final float MATCH_THRESHOLD = 1.0f;
-    private static final String DEVICE_ID = "fb4ed650-5583-11f0-96c6-855152e3efab";
+    private static final String DEVICE_ID = "1c7c9da0-7c42-11f0-8715-c7d1f7b78287";
 
     private UVCCameraTextureView cameraView;
     private GraphicOverlay overlayView;
@@ -80,7 +80,7 @@ public class CameraPreview extends Fragment  {
 
         cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
-        loadModel();
+//        loadModel();
         loadModelOnnx("FaceRecognition.onnx");
         setupFaceDetector();
         usbMonitor.register();
@@ -91,18 +91,18 @@ public class CameraPreview extends Fragment  {
         Log.d(CameraPreview.TAG, "Here the savedFaces" + CameraPreview.savedFaces);
     }
 
-    private void loadModel() {
-        try {
-            AssetFileDescriptor fileDescriptor = requireContext().getAssets().openFd("mobile_face_net.tflite");
-            FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
-            FileChannel fileChannel = inputStream.getChannel();
-            MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.getStartOffset(), fileDescriptor.getDeclaredLength());
-            tfLite = new Interpreter(model);
-            Log.d(TAG, "Deployed model successfully");
-        } catch (IOException e) {
-            Log.e(TAG, "Error loading model", e);
-        }
-    }
+//    private void loadModel() {
+//        try {
+//            AssetFileDescriptor fileDescriptor = requireContext().getAssets().openFd("mobile_face_net.tflite");
+//            FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
+//            FileChannel fileChannel = inputStream.getChannel();
+//            MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.getStartOffset(), fileDescriptor.getDeclaredLength());
+//            tfLite = new Interpreter(model);
+//            Log.d(TAG, "Deployed model successfully");
+//        } catch (IOException e) {
+//            Log.e(TAG, "Error loading model", e);
+//        }
+//    }
 
     // Ham load model moi
     private OrtSession loadModelOnnx(String assetFileName) {
@@ -265,10 +265,20 @@ public class CameraPreview extends Fragment  {
         Faces.Recognition bestFace = null;
 
         Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
-        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
-
-        embeddings = new float[1][OUTPUT_SIZE];
-        tfLite.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
+        float[][][][] input = FaceProcessor.convertBitmapToOnnxInput(cropped);
+        try {
+            OnnxTensor tensor = OnnxTensor.createTensor(ortEnv, input);
+            OrtSession.Result result = ortSession.run(Collections.singletonMap("input", tensor));
+            // Giả sử output là float[1][1][1][192] (embedding vector), lấy ra embedding
+            float[][][][] output = (float[][][][]) result.get(0).getValue();
+            embeddings = new float[1][OUTPUT_SIZE];
+            for (int i = 0; i < OUTPUT_SIZE; i++) {
+                embeddings[0][i] = output[0][0][0][i];
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "ONNX inference error", e);
+            return new Pair<>("Unknown", null);
+        }
 
         for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
             float[] known = ((float[][]) entry.getValue().getExtra())[0];

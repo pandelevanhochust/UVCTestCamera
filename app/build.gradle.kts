@@ -4,11 +4,11 @@ plugins {
 
     android {
         namespace = "com.example.uvctestcamera"
-        compileSdk = 28
+        compileSdk = 35
 
         defaultConfig {
             applicationId = "com.example.uvctestcamera"
-            minSdk = 21
+            minSdk = 24
             //noinspection ExpiredTargetSdkVersion
             targetSdk = 28
             versionCode = 1
@@ -19,6 +19,9 @@ plugins {
             }
 
             testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
+        androidResources {
+            noCompress += "onnx"
         }
 
         buildTypes {
@@ -59,6 +62,9 @@ plugins {
         implementation(libs.mlkit.face.detection)
         implementation(libs.tensorflow.lite)
         implementation(libs.vision.common)
+        //model moi
+        implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
+
 
         implementation(libs.paho.mqtt)
         implementation(libs.paho.android)

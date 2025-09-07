@@ -9,6 +9,24 @@ import java.nio.ByteOrder;
 import java.nio.ReadOnlyBufferException;
 
 public class FaceProcessor {
+        // Hàm chuyển Bitmap sang float[1][3][640][640] cho ONNX
+        public static float[][][][] convertBitmapToOnnxInput(Bitmap bitmap) {
+            int inputSize = 640;
+            float[][][][] input = new float[1][3][inputSize][inputSize];
+            Bitmap resized = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true);
+            int[] intValues = new int[inputSize * inputSize];
+            resized.getPixels(intValues, 0, inputSize, 0, 0, inputSize, inputSize);
+            int pixel = 0;
+            for (int i = 0; i < inputSize; ++i) {
+                for (int j = 0; j < inputSize; ++j) {
+                    final int val = intValues[pixel++];
+                    input[0][0][i][j] = ((val >> 16) & 0xFF) / 255.0f; // R
+                    input[0][1][i][j] = ((val >> 8) & 0xFF) / 255.0f;  // G
+                    input[0][2][i][j] = (val & 0xFF) / 255.0f;         // B
+                }
+            }
+            return input;
+        }
     private static int INPUT_SIZE = 112;
     public static Bitmap ImgtoBmp(Image image, int rotation, Rect boundingBox ){
         Bitmap bitmap = ImgtoBitmap(image);
@@ -40,33 +58,33 @@ public class FaceProcessor {
         Bitmap resized_bitmap = resizeBitmap(cropped);
         return resized_bitmap;
     }
-
-    public static Bitmap ByteBufferToBitmap(ByteBuffer frame) {
-        Bitmap bitmap = Bitmap.createBitmap(PREVIEW_WIDTH, PREVIEW_HEIGHT, Bitmap.Config.ARGB_8888);
-        frame.rewind();
-        bitmap.copyPixelsFromBuffer(frame);
-        return resizeBitmap(bitmap);
-    }
+// dung cho model cu
+    // public static Bitmap ByteBufferToBitmap(ByteBuffer frame) {
+    //     Bitmap bitmap = Bitmap.createBitmap(PREVIEW_WIDTH, PREVIEW_HEIGHT, Bitmap.Config.ARGB_8888);
+    //     frame.rewind();
+    //     bitmap.copyPixelsFromBuffer(frame);
+    //     return resizeBitmap(bitmap);
+    // }
 
     //convert to ByteBuffer - this is used only in CameraX
-    public static ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
-        int inputSize = 112;
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
-        byteBuffer.order(ByteOrder.nativeOrder());
-        int[] intValues = new int[inputSize * inputSize];
-        bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
-        int pixel = 0;
+    // public static ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
+    //     int inputSize = 112;
+    //     ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
+    //     byteBuffer.order(ByteOrder.nativeOrder());
+    //     int[] intValues = new int[inputSize * inputSize];
+    //     bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
+    //     int pixel = 0;
 
-        for (int i = 0; i < inputSize; ++i) {
-            for (int j = 0; j < inputSize; ++j) {
-                final int val = intValues[pixel++];
-                byteBuffer.putFloat(((val >> 16) & 0xFF) / 255.0f); // R
-                byteBuffer.putFloat(((val >> 8) & 0xFF) / 255.0f);  // G
-                byteBuffer.putFloat((val & 0xFF) / 255.0f);         // B
-            }
-        }
-        return byteBuffer;
-    }
+    //     for (int i = 0; i < inputSize; ++i) {
+    //         for (int j = 0; j < inputSize; ++j) {
+    //             final int val = intValues[pixel++];
+    //             byteBuffer.putFloat(((val >> 16) & 0xFF) / 255.0f); // R
+    //             byteBuffer.putFloat(((val >> 8) & 0xFF) / 255.0f);  // G
+    //             byteBuffer.putFloat((val & 0xFF) / 255.0f);         // B
+    //         }
+    //     }
+    //     return byteBuffer;
+    // }
 
     // This is used in the android device
     public static ByteBuffer convertBitmapToByteBufferinDatabase(Bitmap bitmap) {
