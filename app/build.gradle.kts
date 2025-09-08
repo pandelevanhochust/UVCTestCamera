@@ -4,13 +4,12 @@ plugins {
 
     android {
         namespace = "com.example.uvctestcamera"
-        compileSdk = 28
+        compileSdk = 35
 
         defaultConfig {
             applicationId = "com.example.uvctestcamera"
             minSdk = 21
-            //noinspection ExpiredTargetSdkVersion
-            targetSdk = 28
+            targetSdk = 35
             versionCode = 1
             versionName = "1.0"
 

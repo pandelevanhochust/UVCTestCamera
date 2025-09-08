@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Original device -->
     <usb-device vendor-id="6144" product-id="742" />
+    
+    <!-- Common USB Camera vendors -->
+    <usb-device class="14" subclass="1" protocol="0" />
+    <usb-device class="14" subclass="2" protocol="0" />
+    
+    <!-- Logitech cameras -->
+    <usb-device vendor-id="1133" />
+    
+    <!-- Microsoft cameras -->
+    <usb-device vendor-id="1118" />
+    
+    <!-- Generic UVC devices -->
+    <usb-device class="14" />
 </resources>
 

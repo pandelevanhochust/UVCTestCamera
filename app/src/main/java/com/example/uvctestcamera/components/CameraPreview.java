@@ -30,7 +30,7 @@ import java.io.*;
 import java.nio.*;
 import java.nio.channels.FileChannel;
 import java.util.*;
-import ai.onnxruntime.*;
+//import ai.onnxruntime.*;
 
 
 public class CameraPreview extends Fragment  {
@@ -59,8 +59,8 @@ public class CameraPreview extends Fragment  {
     private CameraPreviewLayoutBinding CameraViewBinding;
     private SessionMonitor sessionMonitor;
 
-    private OrtEnvironment ortEnv;
-    private OrtSession ortSession;
+//    private OrtEnvironment ortEnv;
+//    private OrtSession ortSession;
 
     public static final HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
 
@@ -81,19 +81,56 @@ public class CameraPreview extends Fragment  {
         cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
         loadModel();
-        loadModelOnnx("FaceRecognition.onnx");
+        // loadModelOnnx("FaceRecognition.onnx");
         setupFaceDetector();
-        usbMonitor.register();
+        
+        // Update embeddings for users without embeddings after TF Lite is loaded
+        if (tfLite != null) {
+            MQTT.db_handler.updateMissingEmbeddings();
+        }
+        
+        // Safe USB monitor registration with enhanced error handling
+        registerUSBMonitorSafely();
+        
         MQTT.db_handler.loadFacesfromSQL();
 
         sessionMonitor = new SessionMonitor();
         sessionMonitor.start();
         Log.d(CameraPreview.TAG, "Here the savedFaces" + CameraPreview.savedFaces);
+        
+        // Show info message
+        Toast.makeText(getContext(), "Camera initialized. Connect USB camera if available.", Toast.LENGTH_LONG).show();
+    }
+
+    private void registerUSBMonitorSafely() {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            try {
+                Log.d(TAG, "Attempting to register USB Monitor...");
+                
+                if (usbMonitor != null) {
+                    // Register with comprehensive error handling
+                    usbMonitor.register();
+                    Log.d(TAG, "USB Monitor registered successfully");
+                } else {
+                    Log.e(TAG, "USB Monitor is null, cannot register");
+                }
+            } catch (SecurityException e) {
+                Log.w(TAG, "USB Security Exception - continuing without USB camera: " + e.getMessage());
+                // Don't show toast for security exception, just log it
+                // App can still function without USB camera
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Runtime error with USB Monitor: " + e.getMessage());
+                // Continue execution, app can work without camera
+            } catch (Exception e) {
+                Log.e(TAG, "General error registering USB Monitor: " + e.getMessage(), e);
+                // Continue execution
+            }
+        }, 2000); // 2 second delay
     }
 
     private void loadModel() {
         try {
-            AssetFileDescriptor fileDescriptor = requireContext().getAssets().openFd("mobile_face_net.tflite");
+            AssetFileDescriptor fileDescriptor = requireContext().getAssets().openFd("retinaface.tflite");
             FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
             FileChannel fileChannel = inputStream.getChannel();
             MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.getStartOffset(), fileDescriptor.getDeclaredLength());
@@ -105,37 +142,37 @@ public class CameraPreview extends Fragment  {
     }
 
     // Ham load model moi
-    private OrtSession loadModelOnnx(String assetFileName) {
-        OrtSession session = null;
-        try {
-            AssetFileDescriptor afd = getContext().getAssets().openFd(assetFileName);
-            FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
-            FileChannel channel = fis.getChannel();
-            long start = afd.getStartOffset();
-            long length = afd.getDeclaredLength();
-
-            ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
-            channel.position(start);
-            channel.read(bb);
-            bb.flip();
-
-            byte[] modelBytes = new byte[bb.remaining()];
-            bb.get(modelBytes);
-
-            ortEnv = OrtEnvironment.getEnvironment();
-            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-
-            opts.addNnapi();
-
-            session = ortEnv.createSession(modelBytes, opts);
-
-            Log.d(TAG, "Deployed ONNX model successfully: " + assetFileName);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error loading ONNX model: " + assetFileName, e);
-        }
-        return session;
-    }
+//    private OrtSession loadModelOnnx(String assetFileName) {
+//        OrtSession session = null;
+//        try {
+//            AssetFileDescriptor afd = getContext().getAssets().openFd(assetFileName);
+//            FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
+//            FileChannel channel = fis.getChannel();
+//            long start = afd.getStartOffset();
+//            long length = afd.getDeclaredLength();
+//
+//            ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
+//            channel.position(start);
+//            channel.read(bb);
+//            bb.flip();
+//
+//            byte[] modelBytes = new byte[bb.remaining()];
+//            bb.get(modelBytes);
+//
+//            ortEnv = OrtEnvironment.getEnvironment();
+//            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
+//
+//            opts.addNnapi();
+//
+//            session = ortEnv.createSession(modelBytes, opts);
+//
+//            Log.d(TAG, "Deployed ONNX model successfully: " + assetFileName);
+//
+//        } catch (Exception e) {
+//            Log.e(TAG, "Error loading ONNX model: " + assetFileName, e);
+//        }
+//        return session;
+//    }
 
     private void setupFaceDetector() {
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
@@ -167,18 +204,26 @@ public class CameraPreview extends Fragment  {
         public void onAttach(UsbDevice device) {
             Toast.makeText(getContext(), "USB Device Attached", Toast.LENGTH_SHORT).show();
             //Băt được kết nối USB và xin quyền cho app được truy cập Camera
-            usbMonitor.requestPermission(device);
+            try {
+                usbMonitor.requestPermission(device);
+            } catch (SecurityException e) {
+                Log.e(TAG, "Security exception when requesting USB permission", e);
+                Toast.makeText(getContext(), "USB Permission Error", Toast.LENGTH_SHORT).show();
+            }
         }
 
         @Override
         public void onConnect(UsbDevice device, USBMonitor.UsbControlBlock ctrlBlock, boolean createNew) {
-            if (!usbMonitor.hasPermission(device)) {
-                Toast.makeText(getContext(), "USB permission not granted", Toast.LENGTH_SHORT).show();
-                return;
-            }
             try {
+                if (!usbMonitor.hasPermission(device)) {
+                    Toast.makeText(getContext(), "USB permission not granted", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 cameraHandler.open(ctrlBlock);
                 startPreview();
+            } catch (SecurityException e) {
+                Log.e(TAG, "Security exception during USB connection", e);
+                Toast.makeText(getContext(), "USB Security Error", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 Log.e(TAG, "Error opening camera", e);
             }

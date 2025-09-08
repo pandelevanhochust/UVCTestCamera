@@ -32,6 +32,12 @@ public class MainActivity extends AppCompatActivity {
 
         MQTT.loadConfig(this);
         MQTT.db_handler = new Database(getApplicationContext());
+        
+        // Insert fake data before loading faces for testing
+        Log.d(TAG, "Inserting fake data for testing...");
+        MQTT.db_handler.clearAllData();  // Clear old data first
+        MQTT.db_handler.insertFakeData(this);  // Insert fake data (without embeddings initially)
+        
         try {
             MQTT.db_handler.getAllUserSchedules();
         } catch (JSONException e) {
@@ -40,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Use dropUserScheduleTable and loadFacesfromSQL for debugging database
 //        MQTT.db_handler.dropUserScheduleTable();
-          MQTT.db_handler.loadFacesfromSQL();
         MQTT.start();
 
         ImageButton btnIdCard = findViewById(R.id.btn_id_card);

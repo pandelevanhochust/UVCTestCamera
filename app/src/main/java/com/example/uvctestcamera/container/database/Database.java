@@ -16,6 +16,7 @@
     import org.json.JSONException;
     import org.json.JSONObject;
 
+    import java.io.InputStream;
     import java.nio.ByteBuffer;
     import java.nio.ByteOrder;
     import java.text.ParseException;
@@ -136,7 +137,28 @@
                         }
                         Log.d(TAG,"convert bytes to buffer success");
 
-                        ByteBuffer input = FaceProcessor.convertBitmapToByteBufferinDatabase(bitmap);
+                        // Check if TensorFlow Lite is initialized
+                        if (CameraPreview.tfLite == null) {
+                            Log.w(TAG, "TensorFlow Lite not initialized yet, skipping embedding generation for: " + username);
+                            
+                            // Insert without embedding for now
+                            ContentValues values = new ContentValues();
+                            values.put("user_id", userId);
+                            values.put("username", username);
+                            values.put("identify_number", identifyNumber);
+                            values.put("start_time", formattedStart);
+                            values.put("end_time", formattedEnd);
+                            values.put("face_image", faceImageBytes);
+                            values.put("lecturer_id", lecturerId);
+                            values.put("face_embedding", (byte[]) null); // No embedding yet
+                            values.put("device_id", deviceId);
+
+                            db.insert(TABLE_NAME, null, values);
+                            Log.d(TAG, "Inserted user " + username + " without embedding");
+                            continue;
+                        }
+
+                        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(bitmap);
                         float[][] embedding = new float[1][OUTPUT_SIZE];
                         Object[] inputArray = {input};
                         Map<Integer, Object> outputMap = new HashMap<>();
@@ -334,9 +356,173 @@
                 Log.e(TAG, "⚠️ Error parsing end_time or executing query", e);
             }
 
-            return nextEndTime;
+        return nextEndTime;
+    }
+
+    // Insert fake data for testing purposes
+    public void insertFakeData(Context context) {
+        Log.d(TAG, "Inserting fake data for testing...");
+        
+        try {
+            // Create fake JSON data for testing
+            JSONObject fakeParams = new JSONObject();
+            fakeParams.put("LecturerId", "LECTURER001");
+            fakeParams.put("DeviceId", DEVICE_ID);
+            
+            // Set current time and add 2 hours for end time
+            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            Date now = new Date();
+            Date endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000); // Add 2 hours
+            
+            fakeParams.put("TimeStart", isoFormat.format(now));
+            fakeParams.put("TimeEnd", isoFormat.format(endTime));
+            
+            // Create fake students array
+            JSONArray fakeStudents = new JSONArray();
+            
+            // Student 1
+            JSONObject student1Wrapper = new JSONObject();
+            JSONObject student1 = new JSONObject();
+            student1.put("UserId", "STU001");
+            student1.put("UserName", "Toan");
+            student1.put("StudentCode", "20210001");
+            student1.put("Email", "nguyenvana@example.com");
+            student1.put("FaceImage", loadImageFromAssets(context, "student001.jpg"));
+            student1Wrapper.put("Student", student1);
+            fakeStudents.put(student1Wrapper);
+            
+            // Student 2
+            JSONObject student2Wrapper = new JSONObject();
+            JSONObject student2 = new JSONObject();
+            student2.put("UserId", "STU002");
+            student2.put("UserName", "Tung");
+            student2.put("StudentCode", "20210002");
+            student2.put("Email", "tranthib@example.com");
+            student2.put("FaceImage", loadImageFromAssets(context, "student002.jpg"));
+            student2Wrapper.put("Student", student2);
+            fakeStudents.put(student2Wrapper);
+            
+            // Student 3
+            JSONObject student3Wrapper = new JSONObject();
+            JSONObject student3 = new JSONObject();
+            student3.put("UserId", "STU003");
+            student3.put("UserName", "Xuan");
+            student3.put("StudentCode", "20210003");
+            student3.put("Email", "levanc@example.com");
+            student3.put("FaceImage", loadImageFromAssets(context, "student003.jpg"));
+            student3Wrapper.put("Student", student3);
+            fakeStudents.put(student3Wrapper);
+
+            // Student 4
+            JSONObject student4Wrapper = new JSONObject();
+            JSONObject student4 = new JSONObject();
+            student4.put("UserId", "STU004");
+            student4.put("UserName", "Duc");
+            student4.put("StudentCode", "20210004");
+            student4.put("Email", "phamthid@example.com");
+            student4.put("FaceImage", loadImageFromAssets(context, "student004.jpg"));
+            student4Wrapper.put("Student", student4);
+            fakeStudents.put(student4Wrapper);
+
+            fakeParams.put("AttendanceStudents", fakeStudents);
+            
+            // Insert the fake data
+            insertUserSchedule(fakeParams);
+            
+            Log.d(TAG, "Fake data inserted successfully!");
+            
+        } catch (JSONException | ParseException e) {
+            Log.e(TAG, "Error inserting fake data: " + e.getMessage());
+        }
+    }
+
+    // Update embeddings for users who don't have embeddings yet
+    public void updateMissingEmbeddings() {
+        if (CameraPreview.tfLite == null) {
+            Log.w(TAG, "TensorFlow Lite not initialized, cannot update embeddings");
+            return;
         }
 
+        Log.d(TAG, "Updating missing embeddings...");
+        SQLiteDatabase db = this.getWritableDatabase();
+        
+        // Find users without embeddings
+        Cursor cursor = db.rawQuery(
+            "SELECT user_id, username, face_image FROM " + TABLE_NAME + 
+            " WHERE face_embedding IS NULL AND face_image IS NOT NULL", 
+            null
+        );
 
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                String userId = cursor.getString(0);
+                String username = cursor.getString(1);
+                byte[] faceImageBytes = cursor.getBlob(2);
 
+                try {
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(faceImageBytes, 0, faceImageBytes.length);
+                    if (bitmap != null) {
+                        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(bitmap);
+                        float[][] embedding = new float[1][OUTPUT_SIZE];
+                        Object[] inputArray = {input};
+                        Map<Integer, Object> outputMap = new HashMap<>();
+                        outputMap.put(0, embedding);
+                        CameraPreview.tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
+
+                        byte[] embeddingBytes = convertFloatArrayToByteArray(embedding[0]);
+
+                        ContentValues values = new ContentValues();
+                        values.put("face_embedding", embeddingBytes);
+                        
+                        int updated = db.update(TABLE_NAME, values, "user_id = ?", new String[]{userId});
+                        if (updated > 0) {
+                            Log.d(TAG, "Updated embedding for user: " + username);
+                            
+                            // Add to saved faces
+                            Faces.Recognition face = new Faces.Recognition(userId, username, 0f);
+                            face.setExtra(new float[][]{embedding[0]});
+                            CameraPreview.savedFaces.put(username, face);
+                        }
+                    }
+                } catch (Exception e) {
+                    String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    Log.e(TAG, "Error updating embedding for user " + username + ": " + errorMsg, e);
+                }
+            }
+            cursor.close();
+        }
+        db.close();
+        Log.d(TAG, "Finished updating embeddings");
     }
+
+    // Read real PNG image from assets and convert to base64
+    private String loadImageFromAssets(Context context, String fileName) {
+        try {
+            InputStream is = context.getAssets().open(fileName);
+            byte[] buffer = new byte[is.available()];
+            is.read(buffer);
+            is.close();
+            return Base64.encodeToString(buffer, Base64.DEFAULT);
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading image from assets: " + fileName, e);
+            return generateFakeBase64Image(); // Fallback to placeholder
+        }
+    }
+    
+    // Generate a simple fake base64 image (small placeholder)
+    private String generateFakeBase64Image() {
+        // This is a tiny 1x1 pixel PNG image encoded in base64
+        // In a real scenario, you might want to use actual face images
+        return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    }
+    
+    // Clear all data from the table for testing
+    public void clearAllData() {
+        Log.d(TAG, "Clearing all data from table...");
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete(TABLE_NAME, null, null);
+        db.close();
+        Log.d(TAG, "All data cleared successfully!");
+    }
+
+}
