@@ -38,9 +38,9 @@ public class MainActivity extends AppCompatActivity {
             throw new RuntimeException(e);
         }
 
-        // Use dropUserScheduleTable and loadFacesfromSQL for debugging database
-//        MQTT.db_handler.dropUserScheduleTable();
-          MQTT.db_handler.loadFacesfromSQL();
+        MQTT.db_handler.dropUserScheduleTable();
+
+
         MQTT.start();
 
         ImageButton btnIdCard = findViewById(R.id.btn_id_card);
