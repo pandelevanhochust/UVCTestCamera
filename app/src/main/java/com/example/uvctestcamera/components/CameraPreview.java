@@ -35,7 +35,7 @@ import java.util.*;
 //import ai.onnxruntime.*;
 
 
-public class CameraPreview extends Fragment  {
+public class CameraPreview extends Fragment {
 
     private static final String TAG = "AndroidUSBCamera";
 
@@ -51,7 +51,8 @@ public class CameraPreview extends Fragment  {
     private USBMonitor usbMonitor;
     private UVCCameraHandlerMultiSurface cameraHandler;
     private ImageProcessor mImageProcessor;
-    public static Interpreter tfLite;
+    public static Interpreter Detector;
+    public static Interpreter Embedder;
     private FaceDetector faceDetector;
     private float[][] embeddings;
     private int surfaceId = 1;
@@ -82,31 +83,34 @@ public class CameraPreview extends Fragment  {
 
         cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
-        loadModel();
+        // Load the Detector and Embedder above
+        Detector = loadModel("retinaface.tflite");
+        Embedder = loadModel("mobilenet_v2.tflite");
+        // loadModelOnnx("FaceRecognition.onnx");
+
+        //ML kit for Detector API - use instead of ReinaFace
+        setupFaceDetector();
 
         // Insert fake data before loading faces for testing
+        MQTT.db_handler.dropUserScheduleTable();
         Log.d(TAG, "Inserting fake data for testing...");
-        MQTT.db_handler.clearAllData();// Clear old data first
         Context context = requireContext();
         MQTT.db_handler.insertFakeData(context);
-        // loadModelOnnx("FaceRecognition.onnx");
-        setupFaceDetector();
-        
         // Update embeddings for users without embeddings after TF Lite is loaded
-        if (tfLite != null) {
+        if (Embedder != null) {
             MQTT.db_handler.updateMissingEmbeddings();
         }
-        
+        //
+
         // Safe USB monitor registration with enhanced error handling
         registerUSBMonitorSafely();
-        
+
         MQTT.db_handler.loadFacesfromSQL();
+        Log.d(CameraPreview.TAG, "Here the savedFaces" + CameraPreview.savedFaces);
 
         sessionMonitor = new SessionMonitor();
         sessionMonitor.start();
-        Log.d(CameraPreview.TAG, "Here the savedFaces" + CameraPreview.savedFaces);
-        
-        // Show info message
+
         Toast.makeText(getContext(), "Camera initialized. Connect USB camera if available.", Toast.LENGTH_LONG).show();
     }
 
@@ -114,7 +118,7 @@ public class CameraPreview extends Fragment  {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             try {
                 Log.d(TAG, "Attempting to register USB Monitor...");
-                
+
                 if (usbMonitor != null) {
                     // Register with comprehensive error handling
                     usbMonitor.register();
@@ -136,20 +140,32 @@ public class CameraPreview extends Fragment  {
         }, 2000); // 2 second delay
     }
 
-    private void loadModel() {
+    private Interpreter loadModel(String modelName) {
         try {
-            AssetFileDescriptor fileDescriptor = requireContext().getAssets().openFd("retinaface.tflite");
+            AssetFileDescriptor fileDescriptor = requireContext()
+                    .getAssets()
+                    .openFd(modelName);
+
             FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
             FileChannel fileChannel = inputStream.getChannel();
-            MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.getStartOffset(), fileDescriptor.getDeclaredLength());
-            tfLite = new Interpreter(model);
-            Log.d(TAG, "Deployed retinaface model successfully");
+
+            MappedByteBuffer model = fileChannel.map(
+                    FileChannel.MapMode.READ_ONLY,
+                    fileDescriptor.getStartOffset(),
+                    fileDescriptor.getDeclaredLength()
+            );
+
+            Interpreter interpreter = new Interpreter(model);
+            Log.d(TAG, "Deployed model successfully: " + modelName);
+
+            return interpreter;
         } catch (IOException e) {
-            Log.e(TAG, "Error loading retinaface model", e);
+            Log.e(TAG, "Error loading model: " + modelName, e);
+            return null;
         }
     }
 
-    // Ham load model moi
+    // Ham load model onnx
 //    private OrtSession loadModelOnnx(String assetFileName) {
 //        OrtSession session = null;
 //        try {
@@ -191,7 +207,7 @@ public class CameraPreview extends Fragment  {
         faceDetector = FaceDetection.getClient(options);
     }
 
-    // ==== [1] Camera Lifecycle ====
+    // ==== Camera Lifecycle ====
     private void startPreview() {
         cameraView.resetFps();
         cameraHandler.startPreview();
@@ -211,7 +227,6 @@ public class CameraPreview extends Fragment  {
         @Override
         public void onAttach(UsbDevice device) {
             Toast.makeText(getContext(), "USB Device Attached", Toast.LENGTH_SHORT).show();
-            //Băt được kết nối USB và xin quyền cho app được truy cập Camera
             try {
                 usbMonitor.requestPermission(device);
             } catch (SecurityException e) {
@@ -283,7 +298,7 @@ public class CameraPreview extends Fragment  {
         final Bitmap safeFrame = ensureSoftwareBitmap(bitmap);
         InputImage image = InputImage.fromBitmap(safeFrame, 0);
         faceDetector.process(image)
-                .addOnSuccessListener(faces -> onFacesDetected(faces,safeFrame, image))
+                .addOnSuccessListener(faces -> onFacesDetected(faces, safeFrame, image))
                 .addOnFailureListener(e -> Log.e(TAG, "Face detection failed", e));
     }
 
@@ -295,7 +310,7 @@ public class CameraPreview extends Fragment  {
         Rect box = clampRect(face.getBoundingBox(), frameBitmap.getWidth(), frameBitmap.getHeight());
         if (box == null) return;
 
-        float scaleX = overlayView.getWidth()  / (float) inputImage.getWidth();
+        float scaleX = overlayView.getWidth() / (float) inputImage.getWidth();
         float scaleY = overlayView.getHeight() / (float) inputImage.getHeight();
 
         // Single recognition path (remove the duplicate call)
@@ -321,7 +336,7 @@ public class CameraPreview extends Fragment  {
         ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
 
         embeddings = new float[1][OUTPUT_SIZE];
-        tfLite.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
+        Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
 
         for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
             float[] known = ((float[][]) entry.getValue().getExtra())[0];
@@ -358,7 +373,6 @@ public class CameraPreview extends Fragment  {
         if (mImageProcessor != null) mImageProcessor.release();
     }
 
-
     protected class FrameProcessorCallback implements ImageProcessor.ImageProcessorCallback {
         private final int width, height;
         private Bitmap mFrame;
@@ -367,6 +381,7 @@ public class CameraPreview extends Fragment  {
             this.width = width;
             this.height = height;
         }
+
         @Override
         public void onFrame(ByteBuffer frame) {
             long currentTime = System.currentTimeMillis();

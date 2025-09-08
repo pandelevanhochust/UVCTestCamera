@@ -28,13 +28,11 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Log.d(TAG,"Reach MQTT config");
+        Log.d(TAG, "Reach MQTT config");
 
         MQTT.loadConfig(this);
         MQTT.db_handler = new Database(getApplicationContext());
-        
-       // Insert fake data (without embeddings initially)
-        
+
         try {
             MQTT.db_handler.getAllUserSchedules();
         } catch (JSONException e) {
@@ -43,6 +41,8 @@ public class MainActivity extends AppCompatActivity {
 
         // Use dropUserScheduleTable and loadFacesfromSQL for debugging database
 //        MQTT.db_handler.dropUserScheduleTable();
+//        MQTT.db_handler.loadFacesfromSQL();
+
         MQTT.start();
 
         ImageButton btnIdCard = findViewById(R.id.btn_id_card);
@@ -53,13 +53,12 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "Camera button clicked");
             showFragment(new CameraPreview());
         });
-        Log.d(TAG,"Here the camera Preview");
+        Log.d(TAG, "Here the camera Preview");
         showFragment(new CameraPreview());
     }
 
-    private void showFragment(Fragment fragment){
+    private void showFragment(Fragment fragment) {
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-        transaction.replace(R.id.main,fragment)
-                .commit();
+        transaction.replace(R.id.main, fragment).commit();
     }
 }

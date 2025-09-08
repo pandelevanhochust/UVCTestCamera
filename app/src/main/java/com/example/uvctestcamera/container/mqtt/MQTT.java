@@ -40,7 +40,7 @@ public class MQTT {
     private static final String TAG = "MQTT";
 
     public static void loadConfig(Context context) {
-        Log.d(TAG,"Reach loadingConfig");
+        Log.d(TAG, "Reach loadingConfig");
         try {
             AssetManager assetManager = context.getAssets();
             InputStream inputStream = assetManager.open("config.json");
@@ -62,19 +62,20 @@ public class MQTT {
 
             appContext = context.getApplicationContext();
 
-            Log.d(TAG,broker);
+            Log.d(TAG, broker);
 
             inputStream.close();
 
-            Log.d(TAG,"Reach loadingConfig");
+            Log.d(TAG, "Reach loadingConfig");
             System.out.println("[MQTT] Loaded config from assets.");
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-// note lại task
+
+    // note lại task
     public static void start() {
-        Log.d(TAG,"Reach start");
+        Log.d(TAG, "Reach start");
         try {
             if (credentialsExist()) {
                 connectWithCredentials();
@@ -193,7 +194,7 @@ public class MQTT {
     }
 
     private static void connectWithCredentials() throws MqttException {
-       Log.d(TAG,"[MQTT] Connecting with credentials...");
+        Log.d(TAG, "[MQTT] Connecting with credentials...");
 
         client = new MqttClient(broker, clientId, new MemoryPersistence());
         MqttConnectOptions options = new MqttConnectOptions();
@@ -203,42 +204,42 @@ public class MQTT {
         client.connect(options);
 
         if (client.isConnected()) {
-           Log.d(TAG,"[MQTT] Connected to broker: " + broker);
+            Log.d(TAG, "[MQTT] Connected to broker: " + broker);
 
             client.setCallback(new MqttCallback() {
                 public void messageArrived(String topic, MqttMessage message) throws Exception {
 
                     byte[] JSONpayload = message.getPayload();
                     String payload = new String(JSONpayload, StandardCharsets.UTF_8);
-                    Log.d(TAG,"[MQTT] Received RPC on topic: " + topic);
-                    Log.d(TAG,"[MQTT] Message: " + payload);
+                    Log.d(TAG, "[MQTT] Received RPC on topic: " + topic);
+                    Log.d(TAG, "[MQTT] Message: " + payload);
 
-                    if(topic != null && topic.startsWith("v1/devices/me/rpc/request/")){
+                    if (topic != null && topic.startsWith("v1/devices/me/rpc/request/")) {
                         handleRpc(topic, payload);
-                    }else{
-                        Log.d(TAG,"[MQTT] Skipped non-RPC message.");
+                    } else {
+                        Log.d(TAG, "[MQTT] Skipped non-RPC message.");
                     }
                 }
 
                 public void connectionLost(Throwable cause) {
-                   Log.d(TAG,"[connect with Credential] Connection lost: " + cause.getMessage());
-                   retryConnect();
+                    Log.d(TAG, "[connect with Credential] Connection lost: " + cause.getMessage());
+                    retryConnect();
                 }
 
                 public void deliveryComplete(IMqttDeliveryToken token) {
-                   Log.d(TAG,"[MQTT] Delivery complete.");
+                    Log.d(TAG, "[MQTT] Delivery complete.");
                 }
             });
 
-            Log.d(TAG,"Reach subscribe");
-            Log.d(TAG,rpc_topic);
+            Log.d(TAG, "Reach subscribe");
+            Log.d(TAG, rpc_topic);
 
             client.subscribe(rpc_topic, subQos);
 //            if(CameraPreview.savedFaces == null ){
 //                db_handler.loadFacesfromSQL();
 //                Log.d(TAG, "Loading new Facdes set" + CameraPreview.savedFaces);
 //            }
-            Log.d(TAG,"Reach subscribe");
+            Log.d(TAG, "Reach subscribe");
 //            new Thread(() -> sendTelemetryLoop()).start();
         }
     }
@@ -250,7 +251,7 @@ public class MQTT {
             String method = json.optString("method");
             JSONObject params = json.optJSONObject("params");
 
-            Log.d(TAG_RPC,"Topic" + topic);
+            Log.d(TAG_RPC, "Topic" + topic);
             Log.d(TAG_RPC, "Pay load recieved" + params);
 
             if (method.equals("getState") || method.equals("twoWay")) {
@@ -260,20 +261,19 @@ public class MQTT {
                 String responseTopic = topic.replace("request", "response");
                 client.publish(responseTopic, new MqttMessage(response.toString().getBytes()));
                 System.out.println("[RPC] Replied device state.");
-            }
-            else if (method.equals("createPermission")) {
-                Log.d(TAG_RPC,"Reach Permission method");
-                Log.d(TAG_RPC,"createAttendance params: " + params.toString());
+            } else if (method.equals("createPermission")) {
+                Log.d(TAG_RPC, "Reach Permission method");
+                Log.d(TAG_RPC, "createAttendance params: " + params.toString());
 
                 JSONObject response = new JSONObject().put("response", "ok");
 
-                if(db_handler != null){
-                    Log.d(TAG_RPC,"Insert into database" + payload);
+                if (db_handler != null) {
+                    Log.d(TAG_RPC, "Insert into database" + payload);
                     db_handler.insertUserSchedule(params);
                     db_handler.getAllUserSchedules();
                     db_handler.loadFacesfromSQL();
-                }else{
-                    Log.d(TAG_RPC,"Database is null");
+                } else {
+                    Log.d(TAG_RPC, "Database is null");
                 }
 
                 String responseTopic = topic.replace("request", "response");
@@ -285,7 +285,7 @@ public class MQTT {
     }
 
     private static void sendTelemetryLoop() {
-        Log.d(TAG,"[MQTT] Send telemetry loop");
+        Log.d(TAG, "[MQTT] Send telemetry loop");
         while (true) {
             try {
                 JSONObject telemetry = new JSONObject();
@@ -314,7 +314,7 @@ public class MQTT {
     }
 
     private static String getCredentials(Context context, String defaultUsername) {
-        Log.d(TAG,"Reach Save Credential or default");
+        Log.d(TAG, "Reach Save Credential or default");
         try {
             File file = new File(context.getFilesDir(), "credentials");
             FileInputStream fis = new FileInputStream(file);
@@ -328,21 +328,21 @@ public class MQTT {
             fis.close();
             return baos.toString().trim();
         } catch (IOException e) {
-            Log.e(TAG,"Failed loading credential");
+            Log.e(TAG, "Failed loading credential");
             return defaultUsername;
         }
     }
 
     private static void saveCredentials(Context context, String credentials) {
-        Log.d(TAG,"Reach Save Credential");
+        Log.d(TAG, "Reach Save Credential");
         try {
             File file = new File(context.getFilesDir(), "credentials");
             FileOutputStream fos = new FileOutputStream(file);
             fos.write(credentials.getBytes());
             fos.close();
-            Log.d(TAG,"Save Credential successfully");
+            Log.d(TAG, "Save Credential successfully");
         } catch (IOException e) {
-            Log.d(TAG,"Save Credential failed");
+            Log.d(TAG, "Save Credential failed");
             e.printStackTrace();
         }
     }
@@ -370,7 +370,7 @@ public class MQTT {
         return sdf.format(new Date());
     }
 
-    public static void sendFaceMatch(Faces.Recognition detectedFace,String timestamp) {
+    public static void sendFaceMatch(Faces.Recognition detectedFace, String timestamp) {
         try {
             String userId = detectedFace.getId();
             String username = detectedFace.getName();
@@ -382,7 +382,7 @@ public class MQTT {
             }
 
             JSONObject payload = db_handler.findUserwithId(userId);
-            Log.d(TAG,"Matching userId" + payload.toString());
+            Log.d(TAG, "Matching userId" + payload.toString());
 
             payload.put("Timestamp", timestamp);
 //            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
@@ -393,12 +393,12 @@ public class MQTT {
             Date endTime = stf.parse(payload.getString("end_time"));
             String status = payload.has("status") ? payload.getString("status") : null;
 
-            Log.d(TAG, now +" " + startTime + " " + endTime);
+            Log.d(TAG, now + " " + startTime + " " + endTime);
             Log.d(TAG, "Current status" + status);
 
             long allowedLatestTimeMillis = startTime.getTime() + 15 * 60 * 1000;
 
-            if(status == null) {
+            if (status == null) {
                 telemetryHeader = "Attendance_check-in";
                 if (now.getTime() <= allowedLatestTimeMillis) {
                     payload.put("Status", "Check-in");
@@ -452,10 +452,13 @@ public class MQTT {
                             public void connectionLost(Throwable cause) {
                                 retryConnect();
                             }
+
                             public void messageArrived(String topic, MqttMessage message) throws Exception {
                                 handleRpc(topic, new String(message.getPayload()));
                             }
-                            public void deliveryComplete(IMqttDeliveryToken token) { }
+
+                            public void deliveryComplete(IMqttDeliveryToken token) {
+                            }
                         });
 
                         client.subscribe(rpc_topic, subQos);
