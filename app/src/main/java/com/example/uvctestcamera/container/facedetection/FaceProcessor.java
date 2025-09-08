@@ -49,28 +49,86 @@ public class FaceProcessor {
     }
 
     //convert to ByteBuffer - this is used only in CameraX
-    public static ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
-        int inputSize = 112;
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
-        byteBuffer.order(ByteOrder.nativeOrder());
-        int[] intValues = new int[inputSize * inputSize];
-        bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
-        int pixel = 0;
+//
 
-        for (int i = 0; i < inputSize; ++i) {
-            for (int j = 0; j < inputSize; ++j) {
-                final int val = intValues[pixel++];
-                byteBuffer.putFloat(((val >> 16) & 0xFF) / 255.0f); // R
-                byteBuffer.putFloat(((val >> 8) & 0xFF) / 255.0f);  // G
-                byteBuffer.putFloat((val & 0xFF) / 255.0f);         // B
-            }
+    // For RetinaFace model - different input size and format
+    public static ByteBuffer convertBitmapToByteBufferRetinaFace(Bitmap bitmap) {
+        final int inputSize = 640; // RetinaFace typically uses 640x640
+        
+        if (bitmap == null || bitmap.isRecycled()) {
+            throw new IllegalArgumentException("Bitmap is null or recycled");
         }
-        return byteBuffer;
+
+        // 1) Scale to RetinaFace input size
+        Bitmap scaled = (bitmap.getWidth() == inputSize && bitmap.getHeight() == inputSize)
+                ? bitmap
+                : Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true);
+
+        // 2) Ensure ARGB_8888
+        if (scaled.getConfig() != Bitmap.Config.ARGB_8888) {
+            scaled = scaled.copy(Bitmap.Config.ARGB_8888, false);
+        }
+
+        // 3) Read pixels
+        int[] intValues = new int[inputSize * inputSize];
+        scaled.getPixels(intValues, 0, inputSize, 0, 0, inputSize, inputSize);
+
+        // 4) Convert to float RGB (RetinaFace expects different normalization)
+        ByteBuffer bb = ByteBuffer.allocateDirect(inputSize * inputSize * 3 * 4)
+                .order(ByteOrder.nativeOrder());
+        
+        for (int p : intValues) {
+            // RetinaFace typically expects values in range [0, 255] or normalized differently
+            float r = ((p >> 16) & 0xFF);  // No normalization, keep 0-255 range
+            float g = ((p >> 8)  & 0xFF);
+            float b = ( p        & 0xFF);
+            bb.putFloat(r);
+            bb.putFloat(g);
+            bb.putFloat(b);
+        }
+        bb.rewind();
+        return bb;
     }
 
+    public static ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
+        final int inputSize = 640;
+
+        if (bitmap == null || bitmap.isRecycled()) {
+            throw new IllegalArgumentException("Bitmap is null or recycled");
+        }
+
+        // 1) Scale to model input
+        Bitmap scaled = (bitmap.getWidth() == inputSize && bitmap.getHeight() == inputSize)
+                ? bitmap
+                : Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true);
+
+        // 2) Ensure ARGB_8888 so pixel access is stable
+        if (scaled.getConfig() != Bitmap.Config.ARGB_8888) {
+            scaled = scaled.copy(Bitmap.Config.ARGB_8888, false);
+        }
+
+        // 3) Read exactly inputSize*inputSize pixels with stride = inputSize
+        int[] intValues = new int[inputSize * inputSize];
+        scaled.getPixels(intValues, /*offset=*/0, /*stride=*/inputSize,
+                /*x=*/0, /*y=*/0, /*width=*/inputSize, /*height=*/inputSize);
+
+        // 4) Convert to float RGB in NHWC order (0..1). Change if your model expects CHW or BGR.
+        ByteBuffer bb = ByteBuffer.allocateDirect(inputSize * inputSize * 3 * 4)
+                .order(ByteOrder.nativeOrder());
+        for (int p : intValues) {
+            float r = ((p >> 16) & 0xFF) / 255f;
+            float g = ((p >> 8)  & 0xFF) / 255f;
+            float b = ( p        & 0xFF) / 255f;
+            bb.putFloat(r);
+            bb.putFloat(g);
+            bb.putFloat(b);
+        }
+        bb.rewind();
+        return bb;
+    }
     // This is used in the android device
     public static ByteBuffer convertBitmapToByteBufferinDatabase(Bitmap bitmap) {
-        int inputSize = 112;
+        int inputSize = 640;
 
         Bitmap resized = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true);
 
@@ -217,8 +275,8 @@ public class FaceProcessor {
     private static Bitmap resizeBitmap(Bitmap image){
         int width = image.getWidth();
         int height = image.getHeight();
-        float scaleWidth = ((float) 112) / width;
-        float scaleHeight = ((float) 112) / height;
+        float scaleWidth = ((float) 640) / width;
+        float scaleHeight = ((float) 640) / height;
         // CREATE A MATRIX FOR THE MANIPULATION
         Matrix matrix = new Matrix();
         // RESIZE THE BIT MAP

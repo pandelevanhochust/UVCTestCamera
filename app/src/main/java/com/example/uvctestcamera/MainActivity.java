@@ -33,10 +33,7 @@ public class MainActivity extends AppCompatActivity {
         MQTT.loadConfig(this);
         MQTT.db_handler = new Database(getApplicationContext());
         
-        // Insert fake data before loading faces for testing
-        Log.d(TAG, "Inserting fake data for testing...");
-        MQTT.db_handler.clearAllData();  // Clear old data first
-        MQTT.db_handler.insertFakeData(this);  // Insert fake data (without embeddings initially)
+       // Insert fake data (without embeddings initially)
         
         try {
             MQTT.db_handler.getAllUserSchedules();

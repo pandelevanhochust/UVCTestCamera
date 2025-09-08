@@ -1,5 +1,6 @@
 package com.example.uvctestcamera.components;
 
+import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.*;
 import android.hardware.usb.UsbDevice;
@@ -28,6 +29,7 @@ import com.serenegiant.usb.IFrameCallback;
 
 import java.io.*;
 import java.nio.*;
+import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.FileChannel;
 import java.util.*;
 //import ai.onnxruntime.*;
@@ -81,6 +83,12 @@ public class CameraPreview extends Fragment  {
         cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
         loadModel();
+
+        // Insert fake data before loading faces for testing
+        Log.d(TAG, "Inserting fake data for testing...");
+        MQTT.db_handler.clearAllData();// Clear old data first
+        Context context = requireContext();
+        MQTT.db_handler.insertFakeData(context);
         // loadModelOnnx("FaceRecognition.onnx");
         setupFaceDetector();
         
@@ -135,9 +143,9 @@ public class CameraPreview extends Fragment  {
             FileChannel fileChannel = inputStream.getChannel();
             MappedByteBuffer model = fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.getStartOffset(), fileDescriptor.getDeclaredLength());
             tfLite = new Interpreter(model);
-            Log.d(TAG, "Deployed model successfully");
+            Log.d(TAG, "Deployed retinaface model successfully");
         } catch (IOException e) {
-            Log.e(TAG, "Error loading model", e);
+            Log.e(TAG, "Error loading retinaface model", e);
         }
     }
 
@@ -349,6 +357,7 @@ public class CameraPreview extends Fragment  {
         if (mImageProcessorSurfaceId != 0) cameraHandler.removeSurface(mImageProcessorSurfaceId);
         if (mImageProcessor != null) mImageProcessor.release();
     }
+
 
     protected class FrameProcessorCallback implements ImageProcessor.ImageProcessorCallback {
         private final int width, height;

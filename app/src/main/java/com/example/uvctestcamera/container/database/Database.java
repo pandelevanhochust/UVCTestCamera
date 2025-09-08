@@ -158,7 +158,7 @@
                             continue;
                         }
 
-                        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(bitmap);
+                        ByteBuffer input = FaceProcessor.convertBitmapToByteBufferRetinaFace(bitmap);
                         float[][] embedding = new float[1][OUTPUT_SIZE];
                         Object[] inputArray = {input};
                         Map<Integer, Object> outputMap = new HashMap<>();
@@ -462,7 +462,7 @@
                 try {
                     Bitmap bitmap = BitmapFactory.decodeByteArray(faceImageBytes, 0, faceImageBytes.length);
                     if (bitmap != null) {
-                        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(bitmap);
+                        ByteBuffer input = FaceProcessor.convertBitmapToByteBufferRetinaFace(bitmap);
                         float[][] embedding = new float[1][OUTPUT_SIZE];
                         Object[] inputArray = {input};
                         Map<Integer, Object> outputMap = new HashMap<>();
@@ -485,8 +485,7 @@
                         }
                     }
                 } catch (Exception e) {
-                    String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                    Log.e(TAG, "Error updating embedding for user " + username + ": " + errorMsg, e);
+                    Log.e(TAG, "Error updating embedding for user " + username + ": " + e.getMessage());
                 }
             }
             cursor.close();
