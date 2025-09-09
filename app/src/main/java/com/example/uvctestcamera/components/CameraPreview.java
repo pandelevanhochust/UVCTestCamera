@@ -25,7 +25,8 @@ import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
 import com.serenegiant.opencv.ImageProcessor;
 import org.tensorflow.lite.Interpreter;
-import com.serenegiant.usb.IFrameCallback;
+import com.example.uvctestcamera.engine.FaceBox;
+import com.example.uvctestcamera.container.antispoof.EngineWrapper;
 
 import java.io.*;
 import java.nio.*;
@@ -62,8 +63,10 @@ public class CameraPreview extends Fragment {
     private CameraPreviewLayoutBinding CameraViewBinding;
     private SessionMonitor sessionMonitor;
 
-//    private OrtEnvironment ortEnv;
-//    private OrtSession ortSession;
+    private EngineWrapper antiSpoofEngine;
+    private boolean antiSpoofReady = false;
+    private static final float LIVENESS_THRESHOLD = 0.915f; // tune later
+    private static final int LIVENESS_ORIENTATION = 7;      // same convention you used earlier
 
     public static final HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
 
@@ -87,6 +90,13 @@ public class CameraPreview extends Fragment {
         Detector = loadModel("retinaface.tflite");
         Embedder = loadModel("mobilenet_v2.tflite");
         // loadModelOnnx("FaceRecognition.onnx");
+
+        //Load AS Model
+        antiSpoofEngine = new EngineWrapper(requireContext().getAssets());
+        antiSpoofReady = antiSpoofEngine.isReady();
+        if (!antiSpoofReady) {
+            Log.w(TAG, "Anti-spoof engine failed to init.");
+        }
 
         //ML kit for Detector API - use instead of ReinaFace
         setupFaceDetector();
@@ -290,6 +300,7 @@ public class CameraPreview extends Fragment {
         usbMonitor.unregister();
         usbMonitor.destroy();
         CameraViewBinding = null;
+        if (antiSpoofEngine != null) antiSpoofEngine.destroy();
     }
 
     // ==== Face Detection  ====
@@ -327,7 +338,64 @@ public class CameraPreview extends Fragment {
         }
     }
 
+//    private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
+//        float minDistance = Float.MAX_VALUE;
+//        String bestMatch = "Unknown";
+//        Faces.Recognition bestFace = null;
+//
+//        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
+//        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
+//
+//        embeddings = new float[1][OUTPUT_SIZE];
+//        Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
+//
+//        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
+//            float[] known = ((float[][]) entry.getValue().getExtra())[0];
+//            float dist = 0f;
+//            for (int i = 0; i < OUTPUT_SIZE; i++) dist += Math.pow(embeddings[0][i] - known[i], 2);
+//            dist = (float) Math.sqrt(dist);
+//
+//            if (dist < minDistance) {
+//                minDistance = dist;
+//                bestMatch = entry.getKey();
+//                bestFace = entry.getValue();
+//            }
+//        }
+//
+//        if (minDistance > MATCH_THRESHOLD) bestMatch = "Unknown";
+//        if (bestFace != null) bestFace.setDistance(minDistance);
+//        return new Pair<>(bestMatch, bestFace);
+//    }
+
     private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
+        // 1) Liveness first (anti-spoof)
+        if (antiSpoofReady) {
+            // Convert the whole frame to NV21 once (uses the same bitmap you pass to ML Kit)
+            byte[] nv21 = argb8888ToNV21(bitmap);
+
+            // Clamp box just in case (you already do this outside)
+            Rect box = clampRect(boundingBox, bitmap.getWidth(), bitmap.getHeight());
+            if (box != null) {
+                FaceBox fb = new FaceBox(box.left, box.top, box.right, box.bottom, 0f);
+                float score = antiSpoofEngine.livenessScore(
+                        nv21,
+                        bitmap.getWidth(),
+                        bitmap.getHeight(),
+                        LIVENESS_ORIENTATION,
+                        fb
+                );
+                Log.d(TAG, "Liveness score: " + score);
+
+                if (score < LIVENESS_THRESHOLD) {
+                    // short-circuit: treat as spoof/unknown
+                    Faces.Recognition spoof = new Faces.Recognition("Spoof", "Spoof", 0.0f);
+                    spoof.setDistance(Float.NaN);
+                    return new Pair<>("Unknown", spoof);
+                }
+            }
+        }
+
+        // 2) If it's live → do your embedding & nearest match
         float minDistance = Float.MAX_VALUE;
         String bestMatch = "Unknown";
         Faces.Recognition bestFace = null;
@@ -336,12 +404,18 @@ public class CameraPreview extends Fragment {
         ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
 
         embeddings = new float[1][OUTPUT_SIZE];
-        Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
+        Embedder.runForMultipleInputsOutputs(
+                new Object[]{input},
+                Collections.singletonMap(0, embeddings)
+        );
 
         for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
             float[] known = ((float[][]) entry.getValue().getExtra())[0];
             float dist = 0f;
-            for (int i = 0; i < OUTPUT_SIZE; i++) dist += Math.pow(embeddings[0][i] - known[i], 2);
+            for (int i = 0; i < OUTPUT_SIZE; i++) {
+                float d = embeddings[0][i] - known[i];
+                dist += d * d;
+            }
             dist = (float) Math.sqrt(dist);
 
             if (dist < minDistance) {
@@ -446,5 +520,42 @@ public class CameraPreview extends Fragment {
         return new Rect(left, top, right, bottom);
     }
 
+    private static byte[] argb8888ToNV21(Bitmap src) {
+        final int width = src.getWidth();
+        final int height = src.getHeight();
+        int[] argb = new int[width * height];
+        src.getPixels(argb, 0, width, 0, 0, width, height);
 
+        byte[] yuv = new byte[width * height * 3 / 2];
+        int yIndex = 0;
+        int uvIndex = width * height;
+
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
+                int c = argb[j * width + i];
+
+                int R = (c >> 16) & 0xff;
+                int G = (c >> 8) & 0xff;
+                int B = c & 0xff;
+
+                // BT.601 full range
+                int Y = (( 66 * R + 129 * G +  25 * B + 128) >> 8) + 16;
+                int U = ((-38 * R -  74 * G + 112 * B + 128) >> 8) + 128;
+                int V = ((112 * R -  94 * G -  18 * B + 128) >> 8) + 128;
+
+                Y = Math.max(0, Math.min(255, Y));
+                U = Math.max(0, Math.min(255, U));
+                V = Math.max(0, Math.min(255, V));
+
+                yuv[yIndex++] = (byte) Y;
+
+                // NV21: VU interleaved, write on even rows/cols
+                if ((j & 1) == 0 && (i & 1) == 0) {
+                    yuv[uvIndex++] = (byte) V;
+                    yuv[uvIndex++] = (byte) U;
+                }
+            }
+        }
+        return yuv;
+    }
 }
