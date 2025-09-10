@@ -407,7 +407,7 @@ public class CameraPreview extends Fragment {
 
                 if (score < LIVENESS_THRESHOLD) {
                     // Detected as spoof
-                    Log.w(TAG, "⚠️ SPOOF DETECTED - Score (" + score + ") < Threshold (" + LIVENESS_THRESHOLD + ")");
+                    Log.w(TAG, "SPOOF DETECTED - Score (" + score + ") < Threshold (" + LIVENESS_THRESHOLD + ")");
                     Faces.Recognition spoof = new Faces.Recognition("Spoof", "Spoof", 0.0f);
                     spoof.setDistance(Float.NaN);
                     return new Pair<>("Spoof", spoof);
