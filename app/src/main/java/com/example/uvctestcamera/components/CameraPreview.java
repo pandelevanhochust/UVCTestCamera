@@ -25,7 +25,8 @@ import com.serenegiant.usbcameracommon.UVCCameraHandlerMultiSurface;
 import com.serenegiant.widget.UVCCameraTextureView;
 import com.serenegiant.opencv.ImageProcessor;
 import org.tensorflow.lite.Interpreter;
-import com.example.uvctestcamera.engine.FaceBox;
+import com.mv.engine.FaceBox;
+import com.mv.engine.Live;
 import com.example.uvctestcamera.container.antispoof.EngineWrapper;
 
 import java.io.*;
@@ -86,16 +87,22 @@ public class CameraPreview extends Fragment {
 
         cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
-        // Load the Detector and Embedder above
+        // Load only RetinaFace detector for face detection
         Detector = loadModel("retinaface.tflite");
-        Embedder = loadModel("mobilenet_v2.tflite");
+        // Embedder = loadModel("mobilenet_v2.tflite"); // Not needed for anti-spoofing only
         // loadModelOnnx("FaceRecognition.onnx");
 
         //Load AS Model
+        Log.d(TAG, "=== Initializing Anti-Spoofing Engine ===");
+        Log.d(TAG, "Liveness threshold: " + LIVENESS_THRESHOLD);
+        Log.d(TAG, "Liveness orientation: " + LIVENESS_ORIENTATION);
+        
         antiSpoofEngine = new EngineWrapper(requireContext().getAssets());
         antiSpoofReady = antiSpoofEngine.isReady();
         if (!antiSpoofReady) {
-            Log.w(TAG, "Anti-spoof engine failed to init.");
+            Log.e(TAG, "Anti-spoof engine failed to initialize!");
+        } else {
+            Log.i(TAG, "Anti-spoofing engine initialized successfully");
         }
 
         //ML kit for Detector API - use instead of ReinaFace
@@ -138,16 +145,14 @@ public class CameraPreview extends Fragment {
                 }
             } catch (SecurityException e) {
                 Log.w(TAG, "USB Security Exception - continuing without USB camera: " + e.getMessage());
-                // Don't show toast for security exception, just log it
-                // App can still function without USB camera
+            
             } catch (RuntimeException e) {
                 Log.e(TAG, "Runtime error with USB Monitor: " + e.getMessage());
-                // Continue execution, app can work without camera
+                
             } catch (Exception e) {
                 Log.e(TAG, "General error registering USB Monitor: " + e.getMessage(), e);
-                // Continue execution
             }
-        }, 2000); // 2 second delay
+        }, 1000); // 1 second delay
     }
 
     private Interpreter loadModel(String modelName) {
@@ -324,17 +329,19 @@ public class CameraPreview extends Fragment {
         float scaleX = overlayView.getWidth() / (float) inputImage.getWidth();
         float scaleY = overlayView.getHeight() / (float) inputImage.getHeight();
 
-        // Single recognition path (remove the duplicate call)
+        // Anti-spoofing detection
         Pair<String, Faces.Recognition> result = recognize(frameBitmap, box);
-        String detectedName = result.first;
+        String detectedResult = result.first;
         Faces.Recognition detectedFace = result.second;
 
-        overlayView.draw(box, scaleX, scaleY, detectedName);
+        overlayView.draw(box, scaleX, scaleY, detectedResult);
 
-        if (!"Unknown".equals(detectedName)) {
+        if ("Real".equals(detectedResult)) {
             String ts = MQTT.getFormattedTimestamp();
             MQTT.sendFaceMatch(detectedFace, ts);
-            Toast.makeText(getContext(), "Name: " + detectedName, Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Real Face", Toast.LENGTH_SHORT).show();
+        } else if ("Spoof".equals(detectedResult)) {
+            Toast.makeText(getContext(), "Spoof Detected", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -368,15 +375,23 @@ public class CameraPreview extends Fragment {
 //    }
 
     private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
-        // 1) Liveness first (anti-spoof)
+        // Only run anti-spoofing detection
         if (antiSpoofReady) {
+            Log.d(TAG, "=== Starting Anti-Spoofing Analysis ===");
+            
             // Convert the whole frame to NV21 once (uses the same bitmap you pass to ML Kit)
             byte[] nv21 = argb8888ToNV21(bitmap);
+            Log.d(TAG, "Frame converted to NV21, size: " + nv21.length + " bytes");
 
             // Clamp box just in case (you already do this outside)
             Rect box = clampRect(boundingBox, bitmap.getWidth(), bitmap.getHeight());
             if (box != null) {
+                Log.d(TAG, "Face bounding box: [" + box.left + ", " + box.top + ", " + box.right + ", " + box.bottom + "]");
+                Log.d(TAG, "Face size: " + (box.right - box.left) + "x" + (box.bottom - box.top) + " pixels");
+                
                 FaceBox fb = new FaceBox(box.left, box.top, box.right, box.bottom, 0f);
+                Log.d(TAG, "Calling livenessScore with orientation: " + LIVENESS_ORIENTATION);
+                
                 float score = antiSpoofEngine.livenessScore(
                         nv21,
                         bitmap.getWidth(),
@@ -384,50 +399,36 @@ public class CameraPreview extends Fragment {
                         LIVENESS_ORIENTATION,
                         fb
                 );
+                
+                Log.d(TAG, "=== Anti-Spoofing Result ===");
                 Log.d(TAG, "Liveness score: " + score);
+                Log.d(TAG, "Threshold: " + LIVENESS_THRESHOLD);
+                Log.d(TAG, "Decision: " + (score < LIVENESS_THRESHOLD ? "SPOOF" : "REAL"));
 
                 if (score < LIVENESS_THRESHOLD) {
-                    // short-circuit: treat as spoof/unknown
+                    // Detected as spoof
+                    Log.w(TAG, "⚠️ SPOOF DETECTED - Score (" + score + ") < Threshold (" + LIVENESS_THRESHOLD + ")");
                     Faces.Recognition spoof = new Faces.Recognition("Spoof", "Spoof", 0.0f);
                     spoof.setDistance(Float.NaN);
-                    return new Pair<>("Unknown", spoof);
+                    return new Pair<>("Spoof", spoof);
+                } else {
+                    // Detected as real face
+                    Log.i(TAG, "REAL FACE - Score (" + score + ") >= Threshold (" + LIVENESS_THRESHOLD + ")");
+                    Faces.Recognition real = new Faces.Recognition("Real", "Real", score);
+                    real.setDistance(0.0f);
+                    return new Pair<>("Real", real);
                 }
+            } else {
+                Log.e(TAG, "Face bounding box is null or invalid");
             }
+        } else {
+            Log.w(TAG, "Anti-spoofing engine not ready - returning Unknown");
         }
 
-        // 2) If it's live → do your embedding & nearest match
-        float minDistance = Float.MAX_VALUE;
-        String bestMatch = "Unknown";
-        Faces.Recognition bestFace = null;
-
-        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
-        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
-
-        embeddings = new float[1][OUTPUT_SIZE];
-        Embedder.runForMultipleInputsOutputs(
-                new Object[]{input},
-                Collections.singletonMap(0, embeddings)
-        );
-
-        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
-            float[] known = ((float[][]) entry.getValue().getExtra())[0];
-            float dist = 0f;
-            for (int i = 0; i < OUTPUT_SIZE; i++) {
-                float d = embeddings[0][i] - known[i];
-                dist += d * d;
-            }
-            dist = (float) Math.sqrt(dist);
-
-            if (dist < minDistance) {
-                minDistance = dist;
-                bestMatch = entry.getKey();
-                bestFace = entry.getValue();
-            }
-        }
-
-        if (minDistance > MATCH_THRESHOLD) bestMatch = "Unknown";
-        if (bestFace != null) bestFace.setDistance(minDistance);
-        return new Pair<>(bestMatch, bestFace);
+        // Anti-spoofing not ready, return unknown
+        Faces.Recognition unknown = new Faces.Recognition("Unknown", "Unknown", 0.0f);
+        unknown.setDistance(Float.NaN);
+        return new Pair<>("Unknown", unknown);
     }
 
     // ==== Frame Processing ====

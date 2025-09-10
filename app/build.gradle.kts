@@ -9,7 +9,7 @@ plugins {
         defaultConfig {
             applicationId = "com.example.uvctestcamera"
             minSdk = 21
-            targetSdk = 35
+            targetSdk = 28
             versionCode = 1
             versionName = "1.0"
 
@@ -39,10 +39,13 @@ plugins {
             viewBinding = true
             dataBinding = true
         }
+        ndkVersion = "29.0.14033849 rc4"
 
     }
 
     dependencies {
+        implementation(project(":engine"))
+        
         implementation(libs.appcompat)
         implementation(libs.material)
         implementation(libs.activity)
