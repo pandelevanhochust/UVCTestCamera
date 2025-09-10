@@ -68,6 +68,7 @@ public class CameraPreview extends Fragment {
     private boolean antiSpoofReady = false;
     private static final float LIVENESS_THRESHOLD = 0.915f; // tune later
     private static final int LIVENESS_ORIENTATION = 7;      // same convention you used earlier
+    private volatile byte[] nv21;
 
     public static final HashMap<String, Faces.Recognition> savedFaces = new HashMap<>();
 
@@ -96,7 +97,7 @@ public class CameraPreview extends Fragment {
         Log.d(TAG, "=== Initializing Anti-Spoofing Engine ===");
         Log.d(TAG, "Liveness threshold: " + LIVENESS_THRESHOLD);
         Log.d(TAG, "Liveness orientation: " + LIVENESS_ORIENTATION);
-        
+
         antiSpoofEngine = new EngineWrapper(requireContext().getAssets());
         antiSpoofReady = antiSpoofEngine.isReady();
         if (!antiSpoofReady) {
@@ -145,10 +146,10 @@ public class CameraPreview extends Fragment {
                 }
             } catch (SecurityException e) {
                 Log.w(TAG, "USB Security Exception - continuing without USB camera: " + e.getMessage());
-            
+
             } catch (RuntimeException e) {
                 Log.e(TAG, "Runtime error with USB Monitor: " + e.getMessage());
-                
+
             } catch (Exception e) {
                 Log.e(TAG, "General error registering USB Monitor: " + e.getMessage(), e);
             }
@@ -313,6 +314,7 @@ public class CameraPreview extends Fragment {
     private void detectFace(Bitmap bitmap) {
         final Bitmap safeFrame = ensureSoftwareBitmap(bitmap);
         InputImage image = InputImage.fromBitmap(safeFrame, 0);
+        //Currently using MLKit for detection
         faceDetector.process(image)
                 .addOnSuccessListener(faces -> onFacesDetected(faces, safeFrame, image))
                 .addOnFailureListener(e -> Log.e(TAG, "Face detection failed", e));
@@ -330,7 +332,14 @@ public class CameraPreview extends Fragment {
         float scaleY = overlayView.getHeight() / (float) inputImage.getHeight();
 
         // Anti-spoofing detection
+        boolean spoofChecked = checkingSpoof(frameBitmap, box, LIVENESS_ORIENTATION);
+        if (!spoofChecked) {
+            Toast.makeText(getContext(), "Spoof Detected", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         Pair<String, Faces.Recognition> result = recognize(frameBitmap, box);
+
         String detectedResult = result.first;
         Faces.Recognition detectedFace = result.second;
 
@@ -345,90 +354,65 @@ public class CameraPreview extends Fragment {
         }
     }
 
-//    private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
-//        float minDistance = Float.MAX_VALUE;
-//        String bestMatch = "Unknown";
-//        Faces.Recognition bestFace = null;
-//
-//        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
-//        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
-//
-//        embeddings = new float[1][OUTPUT_SIZE];
-//        Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
-//
-//        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
-//            float[] known = ((float[][]) entry.getValue().getExtra())[0];
-//            float dist = 0f;
-//            for (int i = 0; i < OUTPUT_SIZE; i++) dist += Math.pow(embeddings[0][i] - known[i], 2);
-//            dist = (float) Math.sqrt(dist);
-//
-//            if (dist < minDistance) {
-//                minDistance = dist;
-//                bestMatch = entry.getKey();
-//                bestFace = entry.getValue();
-//            }
-//        }
-//
-//        if (minDistance > MATCH_THRESHOLD) bestMatch = "Unknown";
-//        if (bestFace != null) bestFace.setDistance(minDistance);
-//        return new Pair<>(bestMatch, bestFace);
-//    }
-
     private Pair<String, Faces.Recognition> recognize(Bitmap bitmap, Rect boundingBox) {
-        // Only run anti-spoofing detection
-        if (antiSpoofReady) {
-            Log.d(TAG, "=== Starting Anti-Spoofing Analysis ===");
-            
-            // Convert the whole frame to NV21 once (uses the same bitmap you pass to ML Kit)
-            byte[] nv21 = argb8888ToNV21(bitmap);
-            Log.d(TAG, "Frame converted to NV21, size: " + nv21.length + " bytes");
+        float minDistance = Float.MAX_VALUE;
+        String bestMatch = "Unknown";
+        Faces.Recognition bestFace = null;
 
-            // Clamp box just in case (you already do this outside)
-            Rect box = clampRect(boundingBox, bitmap.getWidth(), bitmap.getHeight());
-            if (box != null) {
-                Log.d(TAG, "Face bounding box: [" + box.left + ", " + box.top + ", " + box.right + ", " + box.bottom + "]");
-                Log.d(TAG, "Face size: " + (box.right - box.left) + "x" + (box.bottom - box.top) + " pixels");
-                
-                FaceBox fb = new FaceBox(box.left, box.top, box.right, box.bottom, 0f);
-                Log.d(TAG, "Calling livenessScore with orientation: " + LIVENESS_ORIENTATION);
-                
-                float score = antiSpoofEngine.livenessScore(
-                        nv21,
-                        bitmap.getWidth(),
-                        bitmap.getHeight(),
-                        LIVENESS_ORIENTATION,
-                        fb
-                );
-                
-                Log.d(TAG, "=== Anti-Spoofing Result ===");
-                Log.d(TAG, "Liveness score: " + score);
-                Log.d(TAG, "Threshold: " + LIVENESS_THRESHOLD);
-                Log.d(TAG, "Decision: " + (score < LIVENESS_THRESHOLD ? "SPOOF" : "REAL"));
+        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
+        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
 
-                if (score < LIVENESS_THRESHOLD) {
-                    // Detected as spoof
-                    Log.w(TAG, "SPOOF DETECTED - Score (" + score + ") < Threshold (" + LIVENESS_THRESHOLD + ")");
-                    Faces.Recognition spoof = new Faces.Recognition("Spoof", "Spoof", 0.0f);
-                    spoof.setDistance(Float.NaN);
-                    return new Pair<>("Spoof", spoof);
-                } else {
-                    // Detected as real face
-                    Log.i(TAG, "REAL FACE - Score (" + score + ") >= Threshold (" + LIVENESS_THRESHOLD + ")");
-                    Faces.Recognition real = new Faces.Recognition("Real", "Real", score);
-                    real.setDistance(0.0f);
-                    return new Pair<>("Real", real);
-                }
-            } else {
-                Log.e(TAG, "Face bounding box is null or invalid");
+        embeddings = new float[1][OUTPUT_SIZE];
+        Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
+
+        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
+            float[] known = ((float[][]) entry.getValue().getExtra())[0];
+            float dist = 0f;
+            for (int i = 0; i < OUTPUT_SIZE; i++) dist += Math.pow(embeddings[0][i] - known[i], 2);
+            dist = (float) Math.sqrt(dist);
+
+            if (dist < minDistance) {
+                minDistance = dist;
+                bestMatch = entry.getKey();
+                bestFace = entry.getValue();
             }
-        } else {
-            Log.w(TAG, "Anti-spoofing engine not ready - returning Unknown");
         }
 
-        // Anti-spoofing not ready, return unknown
-        Faces.Recognition unknown = new Faces.Recognition("Unknown", "Unknown", 0.0f);
-        unknown.setDistance(Float.NaN);
-        return new Pair<>("Unknown", unknown);
+        if (minDistance > MATCH_THRESHOLD) bestMatch = "Unknown";
+        if (bestFace != null) bestFace.setDistance(minDistance);
+        return new Pair<>(bestMatch, bestFace);
+    }
+
+    private boolean checkingSpoof(Bitmap bitmap, Rect boundingBox, int livenessOrientation) {
+        if (!antiSpoofReady) {
+            Log.w(TAG, "Anti-spoofing engine not ready - returning Unknown");
+            return false;
+        }
+
+        Log.d(TAG, "=== Starting Anti-Spoofing Analysis ===");
+
+        // Reuse NV21 buffer to reduce GC
+        int w = bitmap.getWidth(), h = bitmap.getHeight();
+
+        //Rerun if next face is not the previous one
+        int needed = w * h * 3 / 2;
+        byte[] nv21Curr = nv21 != null && nv21.length == needed ? nv21 : (nv21 = new byte[needed]);
+        argb8888ToNV21(bitmap, nv21Curr); // into reused buffer
+
+        Rect box = clampRect(boundingBox, w, h);
+        if (box == null) {
+            return false;
+        }
+
+        FaceBox fb = new FaceBox(box.left, box.top, box.right, box.bottom, 0f);
+        float score = antiSpoofEngine.livenessScore(nv21, w, h, livenessOrientation, fb);
+
+        Log.d(TAG, "=== Anti-Spoofing Result ===");
+        Log.d(TAG, "Liveness score: " + score);
+        Log.d(TAG, "Threshold: " + LIVENESS_THRESHOLD);
+        Log.d(TAG, "Decision: " + (score < LIVENESS_THRESHOLD ? "SPOOF" : "REAL"));
+
+        return score >= LIVENESS_THRESHOLD;
     }
 
     // ==== Frame Processing ====
@@ -500,16 +484,14 @@ public class CameraPreview extends Fragment {
 
     }
 
+    //Add image input validation
     private static @Nullable Bitmap ensureSoftwareBitmap(@Nullable Bitmap src) {
-        if (src == null) return null;
-        if (src.isRecycled()) return null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (src.getConfig() == Bitmap.Config.HARDWARE) {
-                // Convert to a software-backed bitmap before any Canvas operations
-                return src.copy(Bitmap.Config.ARGB_8888, false);
-            }
-        }
-        return src;
+        if (src == null || src.isRecycled()) return null;
+        Bitmap.Config cfg = src.getConfig();
+        boolean needsCopy =
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && cfg == Bitmap.Config.HARDWARE)
+                        || cfg != Bitmap.Config.ARGB_8888;
+        return needsCopy ? src.copy(Bitmap.Config.ARGB_8888, false) : src;
     }
 
     private static @Nullable Rect clampRect(@NonNull Rect r, int w, int h) {
@@ -521,42 +503,33 @@ public class CameraPreview extends Fragment {
         return new Rect(left, top, right, bottom);
     }
 
-    private static byte[] argb8888ToNV21(Bitmap src) {
+    private static void argb8888ToNV21(Bitmap src, byte[] outNv21) {
         final int width = src.getWidth();
         final int height = src.getHeight();
         int[] argb = new int[width * height];
         src.getPixels(argb, 0, width, 0, 0, width, height);
 
-        byte[] yuv = new byte[width * height * 3 / 2];
         int yIndex = 0;
         int uvIndex = width * height;
 
         for (int j = 0; j < height; j++) {
             for (int i = 0; i < width; i++) {
                 int c = argb[j * width + i];
-
                 int R = (c >> 16) & 0xff;
                 int G = (c >> 8) & 0xff;
                 int B = c & 0xff;
 
-                // BT.601 full range
-                int Y = (( 66 * R + 129 * G +  25 * B + 128) >> 8) + 16;
-                int U = ((-38 * R -  74 * G + 112 * B + 128) >> 8) + 128;
-                int V = ((112 * R -  94 * G -  18 * B + 128) >> 8) + 128;
+                int Y = ((66 * R + 129 * G + 25 * B + 128) >> 8) + 16;
+                int U = ((-38 * R - 74 * G + 112 * B + 128) >> 8) + 128;
+                int V = ((112 * R - 94 * G - 18 * B + 128) >> 8) + 128;
 
-                Y = Math.max(0, Math.min(255, Y));
-                U = Math.max(0, Math.min(255, U));
-                V = Math.max(0, Math.min(255, V));
+                outNv21[yIndex++] = (byte) (Y < 0 ? 0 : (Y > 255 ? 255 : Y));
 
-                yuv[yIndex++] = (byte) Y;
-
-                // NV21: VU interleaved, write on even rows/cols
                 if ((j & 1) == 0 && (i & 1) == 0) {
-                    yuv[uvIndex++] = (byte) V;
-                    yuv[uvIndex++] = (byte) U;
+                    outNv21[uvIndex++] = (byte) (V < 0 ? 0 : (V > 255 ? 255 : V));
+                    outNv21[uvIndex++] = (byte) (U < 0 ? 0 : (U > 255 ? 255 : U));
                 }
             }
         }
-        return yuv;
     }
 }
