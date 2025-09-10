@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+.venv/
+.idea/
+kaggle.json
+arcface.onnx
