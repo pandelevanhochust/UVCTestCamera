@@ -31,7 +31,8 @@ public class MQTT {
     private static boolean provisioned = false;
     private static String host;
     private static String port;
-    private static String device_name = "43:A1:F6:6C:45:C7";
+//    private static String device_name = "43:A1:F6:6C:45:C7";
+    private static String device_name = "UvcCam-43A1F66C45C7";
 
     public static Database db_handler;
 
