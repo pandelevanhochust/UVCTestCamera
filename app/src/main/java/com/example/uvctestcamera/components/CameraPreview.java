@@ -180,39 +180,6 @@ public class CameraPreview extends Fragment {
         }
     }
 
-    // Ham load model onnx
-//    private OrtSession loadModelOnnx(String assetFileName) {
-//        OrtSession session = null;
-//        try {
-//            AssetFileDescriptor afd = getContext().getAssets().openFd(assetFileName);
-//            FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
-//            FileChannel channel = fis.getChannel();
-//            long start = afd.getStartOffset();
-//            long length = afd.getDeclaredLength();
-//
-//            ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
-//            channel.position(start);
-//            channel.read(bb);
-//            bb.flip();
-//
-//            byte[] modelBytes = new byte[bb.remaining()];
-//            bb.get(modelBytes);
-//
-//            ortEnv = OrtEnvironment.getEnvironment();
-//            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-//
-//            opts.addNnapi();
-//
-//            session = ortEnv.createSession(modelBytes, opts);
-//
-//            Log.d(TAG, "Deployed ONNX model successfully: " + assetFileName);
-//
-//        } catch (Exception e) {
-//            Log.e(TAG, "Error loading ONNX model: " + assetFileName, e);
-//        }
-//        return session;
-//    }
-
     private void setupFaceDetector() {
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -373,12 +340,12 @@ public class CameraPreview extends Fragment {
             byte[][] quantizedEmbeddings = new byte[1][OUTPUT_SIZE];
             Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, quantizedEmbeddings));
             Log.d(TAG, "ArcFace model completed successfully!");
-            
+
             // Dequantize the output according to your model's quantization parameters
             // From your model info: quantization: linear, 0.013646909971642494 * (q - 22)
             float scale = 0.013646909971642494f;
             int zeroPoint = 22;
-            
+
             // Convert quantized output to float
             embeddings = new float[1][OUTPUT_SIZE];
             for (int i = 0; i < OUTPUT_SIZE; i++) {
@@ -556,4 +523,37 @@ public class CameraPreview extends Fragment {
             }
         }
     }
+
+    // Ham load model onnx
+//    private OrtSession loadModelOnnx(String assetFileName) {
+//        OrtSession session = null;
+//        try {
+//            AssetFileDescriptor afd = getContext().getAssets().openFd(assetFileName);
+//            FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
+//            FileChannel channel = fis.getChannel();
+//            long start = afd.getStartOffset();
+//            long length = afd.getDeclaredLength();
+//
+//            ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
+//            channel.position(start);
+//            channel.read(bb);
+//            bb.flip();
+//
+//            byte[] modelBytes = new byte[bb.remaining()];
+//            bb.get(modelBytes);
+//
+//            ortEnv = OrtEnvironment.getEnvironment();
+//            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
+//
+//            opts.addNnapi();
+//
+//            session = ortEnv.createSession(modelBytes, opts);
+//
+//            Log.d(TAG, "Deployed ONNX model successfully: " + assetFileName);
+//
+//        } catch (Exception e) {
+//            Log.e(TAG, "Error loading ONNX model: " + assetFileName, e);
+//        }
+//        return session;
+//    }
 }
