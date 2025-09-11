@@ -48,13 +48,9 @@ public class FaceProcessor {
         return resizeBitmap(bitmap);
     }
 
-    //convert to ByteBuffer - this is used only in CameraX
-//
-
-    // For RetinaFace model - different input size and format
+    //xem xét bỏ
     public static ByteBuffer convertBitmapToByteBufferRetinaFace(Bitmap bitmap) {
-        final int inputSize = 640; // RetinaFace typically uses 640x640
-        
+        final int inputSize = 640; 
         if (bitmap == null || bitmap.isRecycled()) {
             throw new IllegalArgumentException("Bitmap is null or recycled");
         }
@@ -128,11 +124,11 @@ public class FaceProcessor {
     }
     // This is used in the android device
     public static ByteBuffer convertBitmapToByteBufferinDatabase(Bitmap bitmap) {
-        int inputSize = 640;
+        int inputSize = 112; // ArcFace input size
 
         Bitmap resized = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true);
 
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(inputSize * inputSize * 3);
         byteBuffer.order(ByteOrder.nativeOrder());
 
         int[] intValues = new int[inputSize * inputSize];
@@ -142,9 +138,9 @@ public class FaceProcessor {
         for (int i = 0; i < inputSize; ++i) {
             for (int j = 0; j < inputSize; ++j) {
                 final int val = intValues[pixel++];
-                byteBuffer.putFloat(((val >> 16) & 0xFF) / 255.0f); // R
-                byteBuffer.putFloat(((val >> 8) & 0xFF) / 255.0f);  // G
-                byteBuffer.putFloat((val & 0xFF) / 255.0f);         // B
+                byteBuffer.put((byte) ((val >> 16) & 0xFF)); // R
+                byteBuffer.put((byte) ((val >> 8) & 0xFF));  // G
+                byteBuffer.put((byte) (val & 0xFF));         // B
             }
         }
         return byteBuffer;
@@ -220,10 +216,7 @@ public class FaceProcessor {
                 }
             }
             catch (ReadOnlyBufferException ex) {
-                // unfortunately, we cannot check if vBuffer and uBuffer overlap
             }
-
-            // unfortunately, the check failed. We must save U and V pixel by pixel
             vBuffer.put(1, savePixel);
         }
 

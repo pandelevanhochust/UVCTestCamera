@@ -16,13 +16,10 @@ apply plugin: 'kotlin-parcelize'
 android {
     namespace 'com.mv.engine'
     compileSdkVersion 33
-    buildToolsVersion "29.0.3"
 
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion 33
-        versionCode 1
-        versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
@@ -36,11 +33,11 @@ android {
             }
         }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "1.8"
     }
     }
 

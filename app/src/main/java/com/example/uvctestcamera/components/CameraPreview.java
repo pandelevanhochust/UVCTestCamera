@@ -43,7 +43,7 @@ public class CameraPreview extends Fragment {
 
     private static final int PREVIEW_WIDTH = 640;
     private static final int PREVIEW_HEIGHT = 480;
-    private static final int OUTPUT_SIZE = 192;
+    private static final int OUTPUT_SIZE = 512;
     private static final long ANALYZE_INTERVAL_MS = 500;
     private static final float MATCH_THRESHOLD = 1.0f;
     private static final String DEVICE_ID = "fb4ed650-5583-11f0-96c6-855152e3efab";
@@ -66,7 +66,7 @@ public class CameraPreview extends Fragment {
 
     private EngineWrapper antiSpoofEngine;
     private boolean antiSpoofReady = false;
-    private static final float LIVENESS_THRESHOLD = 0.915f; // tune later
+    private static final float LIVENESS_THRESHOLD = 0.515f; // tune later
     private static final int LIVENESS_ORIENTATION = 7;      // same convention you used earlier
     private volatile byte[] nv21;
 
@@ -88,8 +88,7 @@ public class CameraPreview extends Fragment {
 
         cameraHandler = UVCCameraHandlerMultiSurface.createHandler(requireActivity(), cameraView, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, 1, 1.0f);
 
-        // Load only RetinaFace detector for face detection
-        Detector = loadModel("retinaface.tflite");
+        Embedder = loadModel("arcface_int8.tflite");
         // Embedder = loadModel("mobilenet_v2.tflite"); // Not needed for anti-spoofing only
         // loadModelOnnx("FaceRecognition.onnx");
 
@@ -359,23 +358,48 @@ public class CameraPreview extends Fragment {
         String bestMatch = "Unknown";
         Faces.Recognition bestFace = null;
 
-        Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
-        ByteBuffer input = FaceProcessor.convertBitmapToByteBuffer(cropped);
+        if (Embedder == null) {
+            Log.e(TAG, "ArcFace model not loaded!");
+            return new Pair<>("Unknown", null);
+        }
 
-        embeddings = new float[1][OUTPUT_SIZE];
-        Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, embeddings));
+        try {
+            // ArcFace input: 112x112 RGB
+            Log.d(TAG, "=== Starting ArcFace Recognition ===");
+            Bitmap cropped = FaceProcessor.cropAndResize(bitmap, boundingBox);
+            ByteBuffer input = FaceProcessor.convertBitmapToByteBufferinDatabase(cropped);
 
-        for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
-            float[] known = ((float[][]) entry.getValue().getExtra())[0];
-            float dist = 0f;
-            for (int i = 0; i < OUTPUT_SIZE; i++) dist += Math.pow(embeddings[0][i] - known[i], 2);
-            dist = (float) Math.sqrt(dist);
-
-            if (dist < minDistance) {
-                minDistance = dist;
-                bestMatch = entry.getKey();
-                bestFace = entry.getValue();
+            // For quantized model, output is int8, so we need a byte array
+            byte[][] quantizedEmbeddings = new byte[1][OUTPUT_SIZE];
+            Embedder.runForMultipleInputsOutputs(new Object[]{input}, Collections.singletonMap(0, quantizedEmbeddings));
+            Log.d(TAG, "ArcFace model completed successfully!");
+            
+            // Dequantize the output according to your model's quantization parameters
+            // From your model info: quantization: linear, 0.013646909971642494 * (q - 22)
+            float scale = 0.013646909971642494f;
+            int zeroPoint = 22;
+            
+            // Convert quantized output to float
+            embeddings = new float[1][OUTPUT_SIZE];
+            for (int i = 0; i < OUTPUT_SIZE; i++) {
+                embeddings[0][i] = scale * (quantizedEmbeddings[0][i] - zeroPoint);
             }
+
+            for (Map.Entry<String, Faces.Recognition> entry : savedFaces.entrySet()) {
+                float[] known = ((float[][]) entry.getValue().getExtra())[0];
+                float dist = 0f;
+                for (int i = 0; i < OUTPUT_SIZE; i++) dist += Math.pow(embeddings[0][i] - known[i], 2);
+                dist = (float) Math.sqrt(dist);
+
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestMatch = entry.getKey();
+                    bestFace = entry.getValue();
+                }
+            }
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error during face recognition", e);
         }
 
         if (minDistance > MATCH_THRESHOLD) bestMatch = "Unknown";

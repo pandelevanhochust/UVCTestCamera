@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -40,7 +41,7 @@ public class Database extends SQLiteOpenHelper {
     private static final int PREVIEW_WIDTH = 640;
     private static final int PREVIEW_HEIGHT = 480;
 
-    private static final String DEVICE_ID = "1c7c9da0-7c42-11f0-8715-c7d1f7b78287";
+    private static final String DEVICE_ID = "fb4ed650-5583-11f0-96c6-855152e3efab";
 
     public Database(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -94,7 +95,6 @@ public class Database extends SQLiteOpenHelper {
 
     public void insertUserSchedule(JSONObject params) throws JSONException, ParseException {
         SQLiteDatabase db = this.getWritableDatabase();
-
         SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
         SimpleDateFormat targetFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
 
@@ -109,8 +109,10 @@ public class Database extends SQLiteOpenHelper {
         String formattedEnd = targetFormat.format(parsedEnd);
 
         JSONArray students = params.getJSONArray("AttendanceStudents");
-
-        for (int i = 0; i < students.length(); i++) {
+        
+        db.beginTransaction();
+        try {
+            for (int i = 0; i < students.length(); i++) {
             JSONObject studentObj = students.getJSONObject(i).getJSONObject("Student");
 
             String userId = studentObj.getString("UserId");
@@ -152,26 +154,34 @@ public class Database extends SQLiteOpenHelper {
                         values.put("lecturer_id", lecturerId);
                         values.put("face_embedding", (byte[]) null); // No embedding yet
                         values.put("device_id", deviceId);
-
-                        db.insert(TABLE_NAME, null, values);
-                        Log.d(TAG, "Inserted user " + username + " without embedding");
                         continue;
                     }
 
-                    ByteBuffer input = FaceProcessor.convertBitmapToByteBufferRetinaFace(bitmap);
-                    float[][] embedding = new float[1][OUTPUT_SIZE];
+                    ByteBuffer input = FaceProcessor.convertBitmapToByteBufferinDatabase(bitmap);
+                    
+                    // For quantized model, output is int8
+                    byte[][] quantizedEmbedding = new byte[1][OUTPUT_SIZE];
                     Object[] inputArray = {input};
                     Map<Integer, Object> outputMap = new HashMap<>();
-                    outputMap.put(0, embedding);
+                    outputMap.put(0, quantizedEmbedding);
                     CameraPreview.Embedder.runForMultipleInputsOutputs(inputArray, outputMap);
 
+                    // Dequantize the output
+                    float scale = 0.013646909971642494f;
+                    int zeroPoint = 22;
+                    
+                    float[] embedding = new float[OUTPUT_SIZE];
+                    for (int j = 0; j < OUTPUT_SIZE; j++) {
+                        embedding[j] = scale * (quantizedEmbedding[0][j] - zeroPoint);
+                    }
+
                     Faces.Recognition face = new Faces.Recognition(userId, username, 0f);
-                    face.setExtra(new float[][]{embedding[0]}); //Float value
+                    face.setExtra(new float[][]{embedding}); //Float value
                     Log.d(TAG, "add the faces" + username + "-" + face.getExtra());
 
                     CameraPreview.savedFaces.put(username, face);
 
-                    byte[] embeddingBytes = convertFloatArrayToByteArray(embedding[0]); // convert float to bytes
+                    byte[] embeddingBytes = convertFloatArrayToByteArray(embedding); // convert float to bytes
 
                     ContentValues values = new ContentValues();
                     values.put("user_id", userId);
@@ -185,13 +195,32 @@ public class Database extends SQLiteOpenHelper {
                     values.put("face_embedding", embeddingBytes);
                     values.put("device_id", deviceId);
 
-                    db.insert(TABLE_NAME, null, values);
-                    Log.d(TAG, "Inserted user " + username + " successfully");
+                    long result = db.insert(TABLE_NAME, null, values);
+                    if (result != -1) {
+                        Log.d(TAG, "Successfully inserted user " + username + " with embedding, row ID: " + result);
+                    } else {
+                        Log.e(TAG, "Failed to insert user " + username + " with embedding");
+                        // Let's try to get more details about why it failed
+                        Log.e(TAG, "ContentValues: " + values.toString());
+                    }
 
                 } catch (IllegalArgumentException e) {
-                    Log.e(TAG, "Base64 decoding failed: " + e.getMessage());
+                    Log.e(TAG, "Base64 decoding failed for " + username + ": " + e.getMessage());
                 }
+            } else {
+                Log.w(TAG, "No face image data for user: " + username);
             }
+        }
+
+        db.setTransactionSuccessful();
+        } catch (SQLiteException e) {
+            Log.e(TAG, "SQLite error during transaction: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            Log.e(TAG, "General error during transaction: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            db.endTransaction();
         }
 
         db.close();
@@ -250,7 +279,6 @@ public class Database extends SQLiteOpenHelper {
         String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
 
         Log.d(TAG, "Querying with now=" + now + ", device_id=" + DEVICE_ID);
-
 
         String sql = "SELECT user_id, username, face_image, face_embedding " +
                 "FROM " + TABLE_NAME + " " +
@@ -386,14 +414,25 @@ public class Database extends SQLiteOpenHelper {
                 try {
                     Bitmap bitmap = BitmapFactory.decodeByteArray(faceImageBytes, 0, faceImageBytes.length);
                     if (bitmap != null) {
-                        ByteBuffer input = FaceProcessor.convertBitmapToByteBufferRetinaFace(bitmap);
-                        float[][] embedding = new float[1][OUTPUT_SIZE];
+                        ByteBuffer input = FaceProcessor.convertBitmapToByteBufferinDatabase(bitmap);
+                        
+                        //output is int8
+                        byte[][] quantizedEmbedding = new byte[1][OUTPUT_SIZE];
                         Object[] inputArray = {input};
                         Map<Integer, Object> outputMap = new HashMap<>();
-                        outputMap.put(0, embedding);
+                        outputMap.put(0, quantizedEmbedding);
                         CameraPreview.Embedder.runForMultipleInputsOutputs(inputArray, outputMap);
 
-                        byte[] embeddingBytes = convertFloatArrayToByteArray(embedding[0]);
+                        // Dequantize the output
+                        float scale = 0.013646909971642494f;
+                        int zeroPoint = 22;
+                        
+                        float[] embedding = new float[OUTPUT_SIZE];
+                        for (int i = 0; i < OUTPUT_SIZE; i++) {
+                            embedding[i] = scale * (quantizedEmbedding[0][i] - zeroPoint);
+                        }
+
+                        byte[] embeddingBytes = convertFloatArrayToByteArray(embedding);
 
                         ContentValues values = new ContentValues();
                         values.put("face_embedding", embeddingBytes);
@@ -404,7 +443,7 @@ public class Database extends SQLiteOpenHelper {
 
                             // Add to saved faces
                             Faces.Recognition face = new Faces.Recognition(userId, username, 0f);
-                            face.setExtra(new float[][]{embedding[0]});
+                            face.setExtra(new float[][]{embedding});
                             CameraPreview.savedFaces.put(username, face);
                         }
                     }
@@ -502,12 +541,14 @@ public class Database extends SQLiteOpenHelper {
             fakeParams.put("AttendanceStudents", fakeStudents);
 
             // Insert the fake data
+            Log.d(TAG, "About to insert fake data with " + fakeStudents.length() + " students...");
             insertUserSchedule(fakeParams);
 
             Log.d(TAG, "Fake data inserted successfully!");
 
         } catch (JSONException | ParseException e) {
             Log.e(TAG, "Error inserting fake data: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
