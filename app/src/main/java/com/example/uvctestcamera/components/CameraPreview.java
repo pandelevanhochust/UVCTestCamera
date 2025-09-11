@@ -292,6 +292,22 @@ public class CameraPreview extends Fragment {
         CameraViewBinding = null;
     }
 
+    @Override
+    public void onPause() {
+        super.onPause();
+        stopImageProcessor();
+        if (cameraHandler != null) cameraHandler.close();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (cameraHandler != null && !cameraHandler.isOpened()) {
+            // Reopen if USB still connected
+            startPreview();
+        }
+    }
+
     // ==== Face Detection  ====
 
     private void detectFace(Bitmap bitmap) {

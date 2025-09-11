@@ -57,6 +57,22 @@ public class MainActivity extends AppCompatActivity {
         showFragment(new CameraPreview());
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d(TAG, "MainActivity onPause - User pressed Home");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG, "MainActivity onResume - app is visible again");
+        // Nếu cần, khởi tạo lại CameraPreview
+        if (getSupportFragmentManager().findFragmentById(R.id.main) == null) {
+            showFragment(new CameraPreview());
+        }
+    }
+
     private void showFragment(Fragment fragment) {
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
         transaction.replace(R.id.main, fragment).commit();
