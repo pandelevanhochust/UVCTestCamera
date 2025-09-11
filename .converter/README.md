@@ -15,7 +15,7 @@ pip install -r requirements.txt
 ```
 ## Chuẩn bị kaggle
 - Vào https://www.kaggle.com/settings -> API -> Create new token (tải file kaggle.json)
-- `mkdir kaggle && setx KAGGLE_CONFIG_DIR \path\to\project\UVCTestCamera\.converter\.kaggle`   
+- `mkdir .kaggle && setx KAGGLE_CONFIG_DIR \path\to\project\UVCTestCamera\.converter\.kaggle`   
 - Chuyển file kaggle.json vào `.converter\.kaggle`
 
 ## Chuyển đổi model 
