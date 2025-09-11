@@ -1,4 +1,4 @@
-import tensorflow as tf
+import tensorflow as tf  # pyright: ignore[reportMissingImports]
 from calib_dataset import representative_data_gen
 
 converter = tf.lite.TFLiteConverter.from_saved_model("./arcface_tf")

@@ -17,3 +17,7 @@ local.properties
 .idea/
 kaggle.json
 arcface.onnx
+__pycache__/
+*.pyc
+arcface_tf/
+calib_images/
